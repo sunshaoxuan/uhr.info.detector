@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio files
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+
+# NuGet packages
+packages/
+*.nupkg
+project.lock.json
+
+# Logs
+*.log
+DebugLog.txt
+ErrorLog.txt
+
+# IDE
+.vs/
+*.ide
+
+# Others
+*.tmp
+*.cache
