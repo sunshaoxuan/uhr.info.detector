@@ -63,7 +63,7 @@ namespace uhr.info.detector
                 $"　　{{\\b 給与明細バージョン：}} {EscapeRtfText(salaryVersion)}\\line" +
                 $"　　{{\\b 年末調整バージョン：}} {EscapeRtfText(nenchoVersion)}\\line" +
                 $"{{\\b カスタマイズファイル：}} {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}\\line" +
-                "{\\b マージが必要フィアル：}\\line　　" +
+                "{\\b マージが必要ファイル：}\\line　　" +
                 (mergeFiles.Count > 0 ? string.Join("\\line　　", mergeFiles.Select(x => EscapeRtfText(x))) : "なし") +
                 "\\line}";
             rtbResult.Rtf = report;
@@ -80,7 +80,7 @@ namespace uhr.info.detector
 　　<b>　　給与明細バージョン：</b> {salaryVersion}<br>
 　　<b>　　年末調整バージョン：</b> {nenchoVersion}<br>
 <b>カスタマイズファイル：</b> {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}<br>
-<b>マージが必要フィアル：</b><br>　　{(mergeFiles.Count > 0 ? string.Join("<br>　　", mergeFiles) : "なし")}
+<b>マージが必要ファイル：</b><br>　　{(mergeFiles.Count > 0 ? string.Join("<br>　　", mergeFiles) : "なし")}
 ";
 
             // 标准HTML剪贴板格式
