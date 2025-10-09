@@ -25,3 +25,5 @@ ErrorLog.txt
 # Others
 *.tmp
 *.cache
+nul
+.claude/

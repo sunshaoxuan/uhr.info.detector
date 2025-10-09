@@ -103,7 +103,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AppConfig.cs" />
+    <Compile Include="EncodingHelper.cs" />
+    <Compile Include="LogHelper.cs" />
     <Compile Include="SimpleSvnHelper.cs" />
+    <Compile Include="VersionCompareHelper.cs" />
     <Compile Include="frmReport.cs">
       <SubType>Form</SubType>
     </Compile>

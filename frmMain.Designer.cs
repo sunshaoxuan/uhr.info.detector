@@ -68,6 +68,8 @@
             this.cmdSearch = new System.Windows.Forms.Button();
             this.stfDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.fldBrowser = new System.Windows.Forms.FolderBrowserDialog();
+            this.tblLastUpdatedInfo = new System.Windows.Forms.Label();
+            this.txtLastUpdatedInfo = new System.Windows.Forms.TextBox();
             this.statusStrip1.SuspendLayout();
             this.grpBaseInfo.SuspendLayout();
             this.grpCustomizedInfo.SuspendLayout();
@@ -253,6 +255,8 @@
             this.grpCustomizedInfo.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.grpCustomizedInfo.Controls.Add(this.txtLastUpdatedInfo);
+            this.grpCustomizedInfo.Controls.Add(this.tblLastUpdatedInfo);
             this.grpCustomizedInfo.Controls.Add(this.cmdMergeFilePrepare);
             this.grpCustomizedInfo.Controls.Add(this.lblCustomizedFileCount);
             this.grpCustomizedInfo.Controls.Add(this.cmdFilePrepare);
@@ -271,7 +275,7 @@
             // 
             this.cmdMergeFilePrepare.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.cmdMergeFilePrepare.Enabled = false;
-            this.cmdMergeFilePrepare.Location = new System.Drawing.Point(701, 189);
+            this.cmdMergeFilePrepare.Location = new System.Drawing.Point(701, 213);
             this.cmdMergeFilePrepare.Name = "cmdMergeFilePrepare";
             this.cmdMergeFilePrepare.Size = new System.Drawing.Size(112, 32);
             this.cmdMergeFilePrepare.TabIndex = 9;
@@ -291,7 +295,7 @@
             // 
             this.cmdFilePrepare.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.cmdFilePrepare.Enabled = false;
-            this.cmdFilePrepare.Location = new System.Drawing.Point(701, 40);
+            this.cmdFilePrepare.Location = new System.Drawing.Point(701, 68);
             this.cmdFilePrepare.Name = "cmdFilePrepare";
             this.cmdFilePrepare.Size = new System.Drawing.Size(112, 32);
             this.cmdFilePrepare.TabIndex = 8;
@@ -306,15 +310,15 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.lstMergeNeedsFile.FormattingEnabled = true;
             this.lstMergeNeedsFile.ItemHeight = 12;
-            this.lstMergeNeedsFile.Location = new System.Drawing.Point(15, 189);
+            this.lstMergeNeedsFile.Location = new System.Drawing.Point(15, 213);
             this.lstMergeNeedsFile.Name = "lstMergeNeedsFile";
-            this.lstMergeNeedsFile.Size = new System.Drawing.Size(680, 148);
+            this.lstMergeNeedsFile.Size = new System.Drawing.Size(680, 124);
             this.lstMergeNeedsFile.TabIndex = 4;
             // 
             // lblMergeNeedsFiles
             // 
             this.lblMergeNeedsFiles.AutoSize = true;
-            this.lblMergeNeedsFiles.Location = new System.Drawing.Point(13, 173);
+            this.lblMergeNeedsFiles.Location = new System.Drawing.Point(13, 198);
             this.lblMergeNeedsFiles.Name = "lblMergeNeedsFiles";
             this.lblMergeNeedsFiles.Size = new System.Drawing.Size(212, 12);
             this.lblMergeNeedsFiles.TabIndex = 3;
@@ -326,7 +330,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.lstCustomizedFile.FormattingEnabled = true;
             this.lstCustomizedFile.ItemHeight = 12;
-            this.lstCustomizedFile.Location = new System.Drawing.Point(15, 40);
+            this.lstCustomizedFile.Location = new System.Drawing.Point(15, 68);
             this.lstCustomizedFile.Name = "lstCustomizedFile";
             this.lstCustomizedFile.Size = new System.Drawing.Size(680, 124);
             this.lstCustomizedFile.TabIndex = 2;
@@ -334,7 +338,7 @@
             // lblCustomizedFiles
             // 
             this.lblCustomizedFiles.AutoSize = true;
-            this.lblCustomizedFiles.Location = new System.Drawing.Point(13, 25);
+            this.lblCustomizedFiles.Location = new System.Drawing.Point(13, 53);
             this.lblCustomizedFiles.Name = "lblCustomizedFiles";
             this.lblCustomizedFiles.Size = new System.Drawing.Size(163, 12);
             this.lblCustomizedFiles.TabIndex = 1;
@@ -447,6 +451,22 @@
             this.cmdSearch.UseVisualStyleBackColor = true;
             this.cmdSearch.Click += new System.EventHandler(this.cmdSearch_Click);
             // 
+            // tblLastUpdatedInfo
+            // 
+            this.tblLastUpdatedInfo.AutoSize = true;
+            this.tblLastUpdatedInfo.Location = new System.Drawing.Point(13, 27);
+            this.tblLastUpdatedInfo.Name = "tblLastUpdatedInfo";
+            this.tblLastUpdatedInfo.Size = new System.Drawing.Size(77, 12);
+            this.tblLastUpdatedInfo.TabIndex = 10;
+            this.tblLastUpdatedInfo.Text = "最後更新情報";
+            // 
+            // txtLastUpdatedInfo
+            // 
+            this.txtLastUpdatedInfo.Location = new System.Drawing.Point(97, 24);
+            this.txtLastUpdatedInfo.Name = "txtLastUpdatedInfo";
+            this.txtLastUpdatedInfo.Size = new System.Drawing.Size(716, 19);
+            this.txtLastUpdatedInfo.TabIndex = 11;
+            // 
             // frmMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
@@ -523,6 +543,8 @@
         private System.Windows.Forms.ComboBox cboYearAdjustTargetVersion;
         private System.Windows.Forms.Button cmdMergeFilePrepare;
         private System.Windows.Forms.FolderBrowserDialog fldBrowser;
+        private System.Windows.Forms.TextBox txtLastUpdatedInfo;
+        private System.Windows.Forms.Label tblLastUpdatedInfo;
     }
 }
 

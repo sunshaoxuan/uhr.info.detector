@@ -21,7 +21,7 @@ namespace uhr.info.detector
         // using System.IO;
         // using System.Text;
 
-        #region Process超时等待辅助方法
+        #region Process待機と安定化の補助メソッド
         /// <summary>
         /// Processの完了を待機し、タイムアウトとUIの定期更新をサポート
         /// </summary>
@@ -36,7 +36,7 @@ namespace uhr.info.detector
                 if ((DateTime.UtcNow - start).TotalMilliseconds > timeoutMs)
                 {
                     try { process.Kill(); process.WaitForExit(3000); } 
-                    catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] プロセス強制終了失敗: {ex.Message}\n"); }
+                    catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] プロセス強制終了失敗: {ex.Message}\n"); }
                     return false;
                 }
                 Application.DoEvents();
@@ -49,7 +49,7 @@ namespace uhr.info.detector
         /// </summary>
         /// <param name="filePath">ファイルパス</param>
         /// <param name="maxRetries">最大リトライ回数</param>
-        /// <param name="delayMs">各チェック間隔（ミリ秒）</param>
+        /// <param name="delayMs">チェック間隔（ミリ秒）</param>
         /// <returns>ファイルの最終サイズ</returns>
         private long WaitFileStable(string filePath, int maxRetries = 3, int delayMs = 200)
         {
@@ -84,38 +84,9 @@ namespace uhr.info.detector
             public bool TimedOut { get; set; }
         }
 
-        private static readonly Encoding SvnConsoleEncoding = Encoding.GetEncoding(932); // Shift_JIS (CP932)
-                                                                                         // よく使用される2つのエンコーディング
-        private static readonly Encoding EncSjis = Encoding.GetEncoding(932);              // CP932 / Shift_JIS
-        private static readonly Encoding EncUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-        private const string FilePrepareLogName = "FilePrepare.log";
+        // エンコーディング定義は EncodingHelper クラスに移動済み
 
-        /// <summary>
-        /// SVNからのテキスト出力を自動判別してデコード
-        /// UTF-8（BOM付きまたは無損失デコード）を優先し、失敗した場合はCP932（Shift_JIS）にフォールバック
-        /// </summary>
-        /// <param name="bytes">デコードするバイト配列</param>
-        /// <returns>デコードされた文字列</returns>
-        private static string DecodeSvnText(byte[] bytes)
-        {
-            if (bytes == null || bytes.Length == 0) return string.Empty;
-
-            // 1) BOM 直判 UTF-8
-            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                return EncUtf8.GetString(bytes, 3, bytes.Length - 3);
-
-            // 2) UTF-8無損失デコードを試行（throwOnInvalidBytes=trueは無効なシーケンスで例外を投げる）
-            try
-            {
-                var s = EncUtf8.GetString(bytes);
-                // 一部のフォールバック実装がU+FFFDを挿入することを避ける（念のため再チェック）
-                if (!s.Contains('\uFFFD')) return s;
-            }
-            catch { /* UTF-8ではない */ }
-
-            // 3) CP932にフォールバック
-            return EncSjis.GetString(bytes);
-        }
+        // DecodeSvnText メソッドは EncodingHelper.DecodeSvnText に移動済み
 
         // テキストファイル拡張子（失敗時はsvn catにフォールバック）
         private static bool IsTextLikeByExt(string pathOrName)
@@ -126,12 +97,12 @@ namespace uhr.info.detector
                    ext == ".md" || ext == ".dicon";
         }
 
-        // 安全な取得：まずexport（タイムアウトとリトライ付き）、失敗してテキストならcat；すべて失敗でfalseを返す
+        // 安全な取得：まずexport（タイムアウトとリトライ付き）、失敗してテキストならcat、すべて失敗でfalseを返す
         private bool TryFetchToFile(string svnExe, string fullSvnPath, string localPath, int exportTimeoutMs, int catTimeoutMs)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(localPath) ?? AppDomain.CurrentDomain.BaseDirectory);
 
-            // exportを2回試行
+            // export を2回試行
             for (int attempt = 1; attempt <= 2; attempt++)
             {
                 var res = RunSvn(svnExe,
@@ -144,12 +115,12 @@ namespace uhr.info.detector
                     if (File.Exists(localPath))
                     {
                         long finalSize = WaitFileStable(localPath);
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export OK: {fullSvnPath} -> {localPath} size={finalSize}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export OK: {fullSvnPath} -> {localPath} size={finalSize}\n");
                         return true;
                     }
                 }
 
-                SafeLog("ErrorLog.txt",
+                LogHelper.SafeLog("ErrorLog.txt",
                     $"[{DateTime.Now:HH:mm:ss}] export NG({attempt}/2) Exit={res.ExitCode} Timeout={res.TimedOut}\nURL={fullSvnPath}\nSTDERR:\n{res.Stderr}\n");
                 Application.DoEvents();
             }
@@ -161,10 +132,10 @@ namespace uhr.info.detector
                 if (!resCat.TimedOut && resCat.ExitCode == 0 && !string.IsNullOrEmpty(resCat.Stdout))
                 {
                     File.WriteAllText(localPath, resCat.Stdout, Encoding.UTF8);
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fullSvnPath} -> {localPath} len={resCat.Stdout.Length}\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fullSvnPath} -> {localPath} len={resCat.Stdout.Length}\n");
                     return true;
                 }
-                SafeLog("ErrorLog.txt",
+                LogHelper.SafeLog("ErrorLog.txt",
                     $"[{DateTime.Now:HH:mm:ss}] cat NG Exit={resCat.ExitCode} Timeout={resCat.TimedOut}\nURL={fullSvnPath}\nSTDERR:\n{resCat.Stderr}\n");
             }
 
@@ -189,9 +160,9 @@ namespace uhr.info.detector
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                // 強制エンコーディングが指定されている場合はそれを使用、そうでなければ既存のエンコーディング戦略を維持
-                StandardOutputEncoding = forcedEncoding ?? SvnConsoleEncoding,
-                StandardErrorEncoding = forcedEncoding ?? SvnConsoleEncoding,
+                // 強制エンコーディングが指定されている場合、それを使用、そうでなければ既存のエンコーディング戦略を維持
+                StandardOutputEncoding = forcedEncoding ?? EncodingHelper.SvnConsoleEncoding,
+                StandardErrorEncoding = forcedEncoding ?? EncodingHelper.SvnConsoleEncoding,
             };
 
             using (var p = Process.Start(psi))
@@ -202,19 +173,19 @@ namespace uhr.info.detector
                 var msErr = new MemoryStream();
                 var tOut = Task.Run(() => { 
                     try { p.StandardOutput.BaseStream.CopyTo(msOut); } 
-                    catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
+                    catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
                 });
                 var tErr = Task.Run(() => { 
                     try { p.StandardError.BaseStream.CopyTo(msErr); } 
-                    catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
+                    catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
                 });
 
                 bool timedOut = !WaitProcessWithTimeout(p, timeoutMs);
                 try { Task.WaitAll(new[] { tOut, tErr }, 2000); } 
-                catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] Task.WaitAll失敗: {ex.Message}\n"); }
+                catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] Task.WaitAll失敗: {ex.Message}\n"); }
 
                 // psiで指定されたエンコーディングを使用してデコード
-                var enc = forcedEncoding ?? SvnConsoleEncoding;
+                var enc = forcedEncoding ?? EncodingHelper.SvnConsoleEncoding;
                 return new SvnResult
                 {
                     ExitCode = timedOut ? -1 : p.ExitCode,
@@ -226,7 +197,7 @@ namespace uhr.info.detector
         }
 
 
-        // 元の機関リストをキャッシュ
+        // 全機関リストをキャッシュ
         private List<string> orgListCache = new List<string>();
         // フォームメンバーとしてキャンセル用トークンソースを追加
         private CancellationTokenSource orgChangeCts;
@@ -261,11 +232,11 @@ namespace uhr.info.detector
 
         private void FrmMain_FormClosing(object sender, System.Windows.Forms.FormClosingEventArgs e)
         {
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォーム閉じる: Reason={e.CloseReason}, TaskRunning={_isTaskRunning}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォーム閉じる Reason={e.CloseReason}, TaskRunning={_isTaskRunning}\n");
 
             if (_isTaskRunning && e.CloseReason == CloseReason.UserClosing)
             {
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] タスク実行中のため閉じるをキャンセル\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] タスク実行中のため閉じるをキャンセル\n");
                 e.Cancel = true;
                 MessageBox.Show("処理中です。完了するまでお待ちください。", "処理中", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -319,7 +290,7 @@ namespace uhr.info.detector
             // 5. ターゲットバージョンリストの初期化
             InitTargetVersionList();
 
-            // 6. コントロールのロック等は保持（原コード続行）
+            // 6. コントロールのロック等を保持（元コード続行）
             txtOrgCode.ReadOnly = true; txtOrgCode.BackColor = Color.White;
             txtOrgName.ReadOnly = true; txtOrgName.BackColor = Color.White;
             txtFWVersion.ReadOnly = true; txtFWVersion.BackColor = Color.White;
@@ -327,6 +298,8 @@ namespace uhr.info.detector
             txtCoreVersion.ReadOnly = true; txtCoreVersion.BackColor = Color.White;
             txtYearAdjustVersion.ReadOnly = true; txtYearAdjustVersion.BackColor = Color.White;
             cmdShowReport.Enabled = false;
+            txtLastUpdatedInfo.Enabled = true;
+            txtLastUpdatedInfo.ReadOnly = true; 
         }
 
         private void InitTargetVersionList()
@@ -351,9 +324,9 @@ namespace uhr.info.detector
                     var dirs = GetSvnSubDirectories(corePath, svnPath)
                         .Select(name => name.StartsWith(AppConfig.VERSION_PREFIX, StringComparison.OrdinalIgnoreCase) ? name.Substring(1) : name)
                         .ToList();
-                    dirs.Sort(CompareVersionStringSmartAsc); // 数字桁数優先ソート
+                    dirs.Sort(VersionCompareHelper.CompareVersionStringSmartAsc); // 数字桁数優先ソート
                     // ComboBox 表示は降順（新→旧）
-                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(CompareVersionStringSmartAsc)).ToList();
+                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc)).ToList();
                     cboCoreTargetVersion.Items.Clear();
                     foreach (var d in displayDirs)
                         cboCoreTargetVersion.Items.Add(d);
@@ -383,9 +356,9 @@ namespace uhr.info.detector
                     var dirs = GetSvnSubDirectories(salaryPath, svnPath)
                         .Select(name => name.StartsWith(AppConfig.VERSION_PREFIX, StringComparison.OrdinalIgnoreCase) ? name.Substring(1) : name)
                         .ToList();
-                    dirs.Sort(CompareVersionStringSmartAsc);
+                    dirs.Sort(VersionCompareHelper.CompareVersionStringSmartAsc);
                     // ComboBox 表示は降順（新→旧）
-                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(CompareVersionStringSmartAsc)).ToList();
+                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc)).ToList();
                     cboSalaryTargetVersion.Items.Clear();
                     foreach (var d in displayDirs)
                         cboSalaryTargetVersion.Items.Add(d);
@@ -415,9 +388,9 @@ namespace uhr.info.detector
                     var dirs = GetSvnSubDirectories(nenchoPath, svnPath)
                         .Select(name => name.StartsWith(AppConfig.VERSION_PREFIX, StringComparison.OrdinalIgnoreCase) ? name.Substring(1) : name)
                         .ToList();
-                    dirs.Sort(CompareVersionStringSmartAsc);
+                    dirs.Sort(VersionCompareHelper.CompareVersionStringSmartAsc);
                     // ComboBox 表示は降順（新→旧）
-                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(CompareVersionStringSmartAsc)).ToList();
+                    var displayDirs = dirs.OrderByDescending(x => x, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc)).ToList();
                     cboYearAdjustTargetVersion.Items.Clear();
                     foreach (var d in displayDirs)
                         cboYearAdjustTargetVersion.Items.Add(d);
@@ -481,7 +454,7 @@ namespace uhr.info.detector
         {
             try
             {
-                // -R で再帰、--xml は UTF-8 固定出力
+                // -R で再帰、--xml は UTF-8 固定整形
                 var res = RunSvn(svnExePath, $"list --xml -R \"{svnUrl}\"", AppConfig.SVN_COMMAND_TIMEOUT_MS, Encoding.UTF8);
                 if (res.TimedOut) throw new Exception("SVN一覧タイムアウト");
                 if (res.ExitCode != 0) throw new Exception($"SVN一覧失敗(ExitCode={res.ExitCode}): {res.Stderr}");
@@ -502,7 +475,7 @@ namespace uhr.info.detector
         }
 
 
-        // 汎用バージョン比較とファイル衝突チェックメソッド
+        // 汎用バージョン比較・ファイル衝突チェックメソッド
         private Task CheckModuleVersionConflicts(List<(string file, string ver, string module)> mergeFiles,
             List<string> customizedFiles,
             string currentVersion,
@@ -534,7 +507,7 @@ namespace uhr.info.detector
             if (string.IsNullOrEmpty(currentVersion) || string.IsNullOrEmpty(targetVersion) || currentVersion == targetVersion)
                 return;
 
-            tslStatus.Text = $"{moduleName}バージョン比較中: {currentVersion} → {targetVersion}";
+            tslStatus.Text = $"{moduleName}バージョン比較: {currentVersion} → {targetVersion}";
 
             var rootDirectories = GetSvnSubDirectories(svnBasePath, svnPath);
             System.Diagnostics.Debug.WriteLine($"{moduleName}検索対象ディレクトリ: {string.Join(", ", rootDirectories)}");
@@ -551,7 +524,7 @@ namespace uhr.info.detector
                 var versionDirectories = GetSvnSubDirectories(moduleFullPath, svnPath);
                 System.Diagnostics.Debug.WriteLine($"{moduleName}バージョンディレクトリ: {string.Join(", ", versionDirectories)}");
 
-                // バージョン名と元のフォルダ名のマッピングを作成
+                // バージョン名と実際のフォルダ名のマッピングを作成
                 var versionToFolderMap = new Dictionary<string, string>();
                 var allVersions = new List<string>();
 
@@ -565,12 +538,12 @@ namespace uhr.info.detector
                 }
 
                 // バージョンリストを昇順でソート
-                allVersions.Sort(CompareVersionStringSmartAsc);
+                allVersions.Sort(VersionCompareHelper.CompareVersionStringSmartAsc);
                 System.Diagnostics.Debug.WriteLine($"{moduleName}全バージョン: {string.Join(", ", allVersions)}");
 
                 // スマートバージョンマッチング
-                int idxCur = FindSmartVersionIndex(allVersions, currentVersion, moduleName);
-                int idxTarget = FindSmartVersionIndex(allVersions, targetVersion, moduleName);
+                int idxCur = VersionCompareHelper.FindSmartVersionIndex(allVersions, currentVersion, moduleName);
+                int idxTarget = VersionCompareHelper.FindSmartVersionIndex(allVersions, targetVersion, moduleName);
                 System.Diagnostics.Debug.WriteLine($"{moduleName}現在バージョンインデックス: {idxCur}, 目標バージョンインデックス: {idxTarget}");
 
                 if (idxCur >= 0 && idxTarget >= 0 && idxCur != idxTarget)
@@ -578,12 +551,12 @@ namespace uhr.info.detector
                     List<string> needVers;
                     if (idxCur < idxTarget)
                     {
-                        // アップグレード：(cur, target]
+                        // アップグレード: (cur, target]
                         needVers = allVersions.GetRange(idxCur + 1, idxTarget - idxCur);
                     }
                     else
                     {
-                        // ダウングレード：(target, cur]
+                        // ダウングレード: (target, cur]
                         needVers = allVersions.GetRange(idxTarget + 1, idxCur - idxTarget);
                     }
 
@@ -594,7 +567,7 @@ namespace uhr.info.detector
                         token.ThrowIfCancellationRequested();
                         tslStatus.Text = $"{moduleName} {ver} のファイルを確認中...";
 
-                        // 元のフォルダ名を使用してパスを構築
+                        // 実際のフォルダ名を使用してパスを構成
                         if (versionToFolderMap.TryGetValue(ver, out string originalFolderName))
                         {
                             string versionPath = $"{moduleFullPath}/{originalFolderName}";
@@ -615,7 +588,7 @@ namespace uhr.info.detector
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine($"{moduleName}フォルダ名マッピングが見つかりません: {ver}");
+                            System.Diagnostics.Debug.WriteLine($"{moduleName}フォルダ名のマッピングが見つかりません: {ver}");
                         }
                     }
                 }
@@ -626,95 +599,11 @@ namespace uhr.info.detector
             }
         }
 
-        // 汎用スマートバージョンマッチング（年末調整以外でも使用可能）
-        private int FindSmartVersionIndex(List<string> availableVersions, string targetVersion, string moduleName)
-        {
-            if (string.IsNullOrEmpty(targetVersion))
-                return -1;
+        // FindSmartVersionIndex メソッドは VersionCompareHelper.FindSmartVersionIndex に移動済み（直接呼び出し）
 
-            // 1. 完全一致を試す
-            int exactMatch = availableVersions.FindIndex(v => v.Equals(targetVersion, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch >= 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"{moduleName}完全一致: {targetVersion} -> {availableVersions[exactMatch]}");
-                return exactMatch;
-            }
+        // 年末調整用のバージョンマッチングは VersionCompareHelper.FindSmartVersionIndex を直接使用
 
-            // 2. ベースバージョン（+記号より前の部分）でマッチング
-            string baseVersion = targetVersion.Split('+')[0].Trim();
-            int baseMatch = availableVersions.FindIndex(v => v.StartsWith(baseVersion, StringComparison.OrdinalIgnoreCase));
-            if (baseMatch >= 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"{moduleName}ベースバージョン一致: {targetVersion} -> {availableVersions[baseMatch]} (ベース: {baseVersion})");
-                return baseMatch;
-            }
-
-            // 3. 部分一致（最も近いバージョンを見つける）
-            var baseVersionParts = baseVersion.Split('.');
-            int bestMatch = -1;
-            int bestScore = -1;
-
-            for (int i = 0; i < availableVersions.Count; i++)
-            {
-                string availableVersion = availableVersions[i];
-                var availableParts = availableVersion.Split('.');
-
-                // 主要バージョン番号（最初の2つ）でスコア計算
-                int score = 0;
-                int minParts = Math.Min(baseVersionParts.Length, availableParts.Length);
-
-                for (int j = 0; j < Math.Min(minParts, 2); j++) // 最初の2つの部分のみ比較
-                {
-                    if (int.TryParse(baseVersionParts[j], out int baseNum) &&
-                        int.TryParse(availableParts[j], out int availableNum))
-                    {
-                        if (baseNum == availableNum)
-                            score += 10; // 完全一致
-                        else if (Math.Abs(baseNum - availableNum) == 1)
-                            score += 5;  // 1つ違い
-                        else
-                            score += Math.Max(0, 5 - Math.Abs(baseNum - availableNum)); // 距離に応じて減点
-                    }
-                }
-
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestMatch = i;
-                }
-            }
-
-            if (bestMatch >= 0 && bestScore > 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"{moduleName}最適マッチ: {targetVersion} -> {availableVersions[bestMatch]} (スコア: {bestScore})");
-                return bestMatch;
-            }
-
-            System.Diagnostics.Debug.WriteLine($"{moduleName}マッチなし: {targetVersion}");
-            return -1;
-        }
-
-        // 年末調整用のスマートバージョンマッチング（後方互換性のため残す）
-        [Obsolete("このメソッドは現在使用されておらず、将来のバージョンで削除される可能性があります")]
-        private int FindYearAdjustVersionIndex(List<string> availableVersions, string targetVersion)
-        {
-            return FindSmartVersionIndex(availableVersions, targetVersion, "YearAdjust");
-        }
-
-        // バージョン文字列の昇順比較（例: 2.9.1 < 2.10.4 < 2.11.3）
-        private int CompareVersionStringSmartAsc(string a, string b)
-        {
-            var pa = a.Split('.');
-            var pb = b.Split('.');
-            int len = Math.Max(pa.Length, pb.Length);
-            for (int i = 0; i < len; i++)
-            {
-                int va = i < pa.Length && int.TryParse(pa[i], out var tva) ? tva : 0;
-                int vb = i < pb.Length && int.TryParse(pb[i], out var tvb) ? tvb : 0;
-                if (va != vb) return va.CompareTo(vb); // 昇順
-            }
-            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase); // 昇順
-        }
+        // CompareVersionStringSmartAsc メソッドは VersionCompareHelper.CompareVersionStringSmartAsc に移動済み（直接呼び出し）
 
         private void txtOrgFilter_TextChanged(object sender, EventArgs e)
         {
@@ -814,11 +703,11 @@ namespace uhr.info.detector
 
                 // 4. 最初にバージョン情報を取得（非同期処理）
                 await GatherModuleVersionAsync();
-                Application.DoEvents(); // 界面更新
+                Application.DoEvents(); // UI更新
 
                 token.ThrowIfCancellationRequested();
 
-                // 5. 次にカスタマイズファイルリストを取得（非同期処理）GetSvnFileListXmlRecursive
+                // 5. 次にカスタマイズファイルリストを取得（非同期処理：GetSvnFileListXmlRecursive）
                 var customizedFiles = await GatherCustomizedFileListAsync();
                 token.ThrowIfCancellationRequested();
                 if (lstCustomizedFile.Items.Count == 0)
@@ -830,8 +719,11 @@ namespace uhr.info.detector
                 }
                 else
                 {
+                    // SVN最後更新情報を取得して表示
+                    await GatherSvnLastUpdatedInfoAsync();
+
                     SwitchFilePrepareButton(true, 1); // カスタマイズファイル準備ボタンを表示
-                    tslStatus.Text = $"カスタマイズファイルが {lstCustomizedFile.Items.Count} 個見つかりました。";
+                    tslStatus.Text = $"カスタマイズファイルが{lstCustomizedFile.Items.Count}個見つかりました。";
 
                     // 6. 最後にファイル比較を実行（非同期処理）
                     await CompareFiles(customizedFiles, token);
@@ -839,7 +731,7 @@ namespace uhr.info.detector
                     if (lstMergeNeedsFile.Items.Count > 0)
                     {
                         SwitchFilePrepareButton(true, 2); // マージファイル準備ボタンを表示
-                        tslStatus.Text = $"カスタマイズファイルと競合するファイルが {lstMergeNeedsFile.Items.Count} 個見つかりました。";
+                        tslStatus.Text = $"カスタマイズファイルと競合するファイルが{lstMergeNeedsFile.Items.Count}個見つかりました。";
                     }
                     else
                     {
@@ -907,7 +799,7 @@ namespace uhr.info.detector
             {
                 foreach (var item in result)
                     lstCustomizedFile.Items.Add(item);
-                tslStatus.Text = $"カスタマイズファイル: {result.Count} 個が見つかりました。";
+                tslStatus.Text = $"カスタマイズファイル: {result.Count}個が見つかりました。";
                 lblCustomizedFileCount.Text = $"({result.Count})";
 
                 // 追加：smart-company開始のjarファイルをチェック
@@ -1027,16 +919,16 @@ namespace uhr.info.detector
         {
             try
             {
-                // ファイルの存在とアクセス可能性を複数チェック
+                // ファイルの存在とアクセス可能性を厳密にチェック
                 if (string.IsNullOrEmpty(filePath))
                 {
-                    System.Diagnostics.Debug.WriteLine("CalculateFileHash: 文件路径为空");
+                    System.Diagnostics.Debug.WriteLine("CalculateFileHash: ファイルパスが空");
                     return "";
                 }
 
                 if (!File.Exists(filePath))
                 {
-                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 文件不存在: {filePath}");
+                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: ファイル不存在: {filePath}");
                     return "";
                 }
 
@@ -1044,18 +936,18 @@ namespace uhr.info.detector
                 FileInfo fileInfo = new FileInfo(filePath);
                 if (fileInfo.Length > 50 * 1024 * 1024) // 50MB制限
                 {
-                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 文件过大({fileInfo.Length / 1024 / 1024}MB): {filePath}");
+                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: ファイル過大({fileInfo.Length / 1024 / 1024}MB): {filePath}");
                     return "";
                 }
 
                 // 極小のファイルの場合、空ファイルの可能性もある
                 if (fileInfo.Length == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 文件为空: {filePath}");
+                    System.Diagnostics.Debug.WriteLine($"CalculateFileHash: ファイルが空: {filePath}");
                     return "empty_file_hash";
                 }
 
-                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 开始计算 {filePath} (大小: {fileInfo.Length} bytes)");
+                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 計算開始: {filePath} (サイズ: {fileInfo.Length} bytes)");
 
                 // ファイルの解放を待機し、他のプロセスによる占有を防ぐ
                 int retryCount = 0;
@@ -1063,7 +955,7 @@ namespace uhr.info.detector
                 {
                     try
                     {
-                        // 複数の方法でファイル読み取りを試行
+                        // 厳密な方法でファイル読み取りを試行
                         byte[] fileBytes = null;
 
                         // 方法1: 直接バイト読み取り（最も安全な方法）
@@ -1092,7 +984,7 @@ namespace uhr.info.detector
                         {
                             byte[] hashBytes = md5.ComputeHash(fileBytes);
                             string hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-                            System.Diagnostics.Debug.WriteLine($"CalculateFileHash: HASH计算成功: {hash}");
+                            System.Diagnostics.Debug.WriteLine($"CalculateFileHash: HASH計算成功: {hash}");
                             return hash;
                         }
                     }
@@ -1100,28 +992,28 @@ namespace uhr.info.detector
                     {
                         // ファイルが占有されている場合、待機後にリトライ
                         retryCount++;
-                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 文件被占用，重试 {retryCount}/5: {ioEx.Message}");
+                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: ファイルが占有中、再試行{retryCount}/5: {ioEx.Message}");
                         System.Threading.Thread.Sleep(500); // 500ms待機
                     }
                     catch (UnauthorizedAccessException authEx)
                     {
-                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 访问权限拒绝: {authEx.Message}");
+                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: アクセス権限拒否: {authEx.Message}");
                         return "";
                     }
                     catch (Exception otherEx)
                     {
-                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 其他错误: {otherEx.Message}");
+                        System.Diagnostics.Debug.WriteLine($"CalculateFileHash: その他のエラー: {otherEx.Message}");
                         break;
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 重试次数用尽，HASH计算失败");
+                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: リトライ回数が尽きました、HASH計算失敗");
                 return "";
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 总体异常: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 堆栈: {ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: 全体例外: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"CalculateFileHash: スタックトレース: {ex.StackTrace}");
                 // MessageBoxを表示せず、デバッグ情報を記録し、ブロックを避ける
                 return "";
             }
@@ -1135,11 +1027,11 @@ namespace uhr.info.detector
             Directory.CreateDirectory(tempDir);
             string targetPath = Path.Combine(tempDir, fileName);
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export開始: {fileName}\n  URL={fullSvnPath}\n  OUT={targetPath}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export開姁E {fileName}\n  URL={fullSvnPath}\n  OUT={targetPath}\n");
 
             if (!File.Exists(svnExe))
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN実行ファイル不存在: {svnExe}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN実行ファイル不存在: {svnExe}\n");
                 return "";
             }
 
@@ -1151,8 +1043,8 @@ namespace uhr.info.detector
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                StandardOutputEncoding = SvnConsoleEncoding,   // ★ 新規追加：CP932でデコード
-                StandardErrorEncoding = SvnConsoleEncoding    // ★ 新規追加
+                StandardOutputEncoding = EncodingHelper.SvnConsoleEncoding,   // ★新規追加：CP932でデコード
+                StandardErrorEncoding = EncodingHelper.SvnConsoleEncoding    // ★新規追加
             };
 
             Process proc = null;
@@ -1161,7 +1053,7 @@ namespace uhr.info.detector
                 proc = System.Diagnostics.Process.Start(psi);
                 if (proc == null)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] プロセス起動失敗\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] プロセス起動失敗\n");
                     return "";
                 }
 
@@ -1169,17 +1061,17 @@ namespace uhr.info.detector
                 var msErr = new MemoryStream();
                 var tOut = Task.Run(() => { 
                     try { proc.StandardOutput.BaseStream.CopyTo(msOut); } 
-                    catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
+                    catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
                 });
                 var tErr = Task.Run(() => { 
                     try { proc.StandardError.BaseStream.CopyTo(msErr); } 
-                    catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
+                    catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
                 });
 
                 const int timeoutMs = 120_000;
                 if (!WaitProcessWithTimeout(proc, timeoutMs))
                 {
-                    // タイムアウト時の処理
+                    // タイムアウト時の処琁E
                         if (IsTextLikeByExt(fullSvnPath))
                         {
                             string svnExeLocal = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
@@ -1190,35 +1082,35 @@ namespace uhr.info.detector
                             {
                                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? Path.GetTempPath());
                                 File.WriteAllText(targetPath, catRes.Stdout, Encoding.UTF8);
-                                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fileName} -> {targetPath}\n");
-                                return targetPath; // ★ 成功：catの結果をダウンロード成功として扱う
+                                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fileName} -> {targetPath}\n");
+                                return targetPath; // ★成功：catの結果をダウンロード成功として扱う
                             }
 
                             // cat失敗も記録
-                            SafeLog("ErrorLog.txt",
+                            LogHelper.SafeLog("ErrorLog.txt",
                                 $"[{DateTime.Now:HH:mm:ss}] cat NG Exit={catRes.ExitCode} Timeout={catRes.TimedOut}\nURL={fullSvnPath}\nSTDERR:\n{catRes.Stderr}\n");
                         }
 
-                        SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] svn export タイムアウト: {fullSvnPath}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] svn export タイムアウト: {fullSvnPath}\n");
                         return "";
                     }
 
 
-                // … stdoutTask / stderrTask の後処理の後：
+                // … stdoutTask / stderrTask の後処理終了
                 try { tOut.Wait(2000); } 
-                catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] tOut.Wait失敗: {ex.Message}\n"); }
+                catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] tOut.Wait失敗: {ex.Message}\n"); }
                 try { tErr.Wait(2000); } 
-                catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] tErr.Wait失敗: {ex.Message}\n"); }
+                catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] tErr.Wait失敗: {ex.Message}\n"); }
 
                 byte[] rawOut = msOut.ToArray();
                 byte[] rawErr = msErr.ToArray();
 
-                string stdoutStr = DecodeSvnText(rawOut);
-                string stderrStr = DecodeSvnText(rawErr);
+                string stdoutStr = EncodingHelper.DecodeSvnText(rawOut);
+                string stderrStr = EncodingHelper.DecodeSvnText(rawErr);
 
                 if (proc.ExitCode != 0)
                 {
-                    SafeLog("ErrorLog.txt",
+                    LogHelper.SafeLog("ErrorLog.txt",
                         $"[{DateTime.Now:HH:mm:ss}] export失敗(ExitCode={proc.ExitCode}) URL={fullSvnPath}\n" +
                         $"STDERR:\n{(stderrStr.Length > 400 ? stderrStr.Substring(0, 400) + "..." : stderrStr)}\n");
                     return "";
@@ -1227,17 +1119,17 @@ namespace uhr.info.detector
                 for (int i = 0; i < 25 && !File.Exists(targetPath); i++) System.Threading.Thread.Sleep(20);
                 if (!File.Exists(targetPath))
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] export終了だが出力ファイル不存在: {targetPath}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] export終了後も出力ファイル不存在: {targetPath}\n");
                     return "";
                 }
 
                 long finalSize = WaitFileStable(targetPath);
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export成功: {fileName} size={finalSize}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] export成功: {fileName} size={finalSize}\n");
                 return targetPath;
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] DownloadFileFromSVN 例外: {ex.Message}\nStackTrace: {ex.StackTrace}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] DownloadFileFromSVN 例外: {ex.Message}\nStackTrace: {ex.StackTrace}\n");
                 return "";
             }
             finally
@@ -1251,7 +1143,7 @@ namespace uhr.info.detector
                     }
                     proc?.Dispose();
                 }
-                catch { /* 清理失败忽略 */ }
+                catch { /* 削除失敗は無視 */ }
             }
         }
 
@@ -1266,9 +1158,9 @@ namespace uhr.info.detector
 
                 // --xmlで固定UTF-8出力；RunSvnで強制UTF-8デコード
                 var res = RunSvn(svnPath, $"list --xml \"{baseSvnUrl}\"", AppConfig.SVN_COMMAND_TIMEOUT_MS * 5, Encoding.UTF8);
-                if (res.TimedOut) throw new Exception("SVN列表命令超时");
-                if (res.ExitCode != 0) throw new Exception($"SVN列表命令失败(ExitCode={res.ExitCode}): {res.Stderr}");
-                if (string.IsNullOrWhiteSpace(res.Stdout)) throw new Exception($"SVN未返回任何结果: {baseSvnUrl}");
+                if (res.TimedOut) throw new Exception("SVNリストコマンドタイムアウト");
+                if (res.ExitCode != 0) throw new Exception($"SVNリストコマンド失敗(ExitCode={res.ExitCode}): {res.Stderr}");
+                if (string.IsNullOrWhiteSpace(res.Stdout)) throw new Exception($"SVNが何も結果を返しませんでした: {baseSvnUrl}");
 
                 // XML解析：<entry kind="dir"><name>xxxx</name></entry>
                 var xdoc = System.Xml.Linq.XDocument.Parse(res.Stdout);
@@ -1284,14 +1176,14 @@ namespace uhr.info.detector
                     names.FirstOrDefault(n => n.StartsWith($"{orgCode}_", StringComparison.OrdinalIgnoreCase) && n.EndsWith("_HRDB"));
 
                 if (string.IsNullOrEmpty(orgFolder))
-                    throw new Exception($"未找到机构代码 '{orgCode}' 对应的SVN文件夹。可用文件夹: {string.Join(", ", names)}");
+                    throw new Exception($"機関コード'{orgCode}'に対応するSVNフォルダが見つかりません。利用可能フォルダ: {string.Join(", ", names)}");
 
-                System.Diagnostics.Debug.WriteLine($"找到的机构文件夹: {orgFolder}");
-                return orgFolder; // ← 引き続き返す
+                System.Diagnostics.Debug.WriteLine($"見つけた機関フォルダ: {orgFolder}");
+                return orgFolder; // →引き続き返す
             }
             catch (Exception ex)
             {
-                throw new Exception($"查找机构SVN文件夹失败: {ex.Message}");
+                throw new Exception($"機関SVNフォルダの検索失敗: {ex.Message}");
             }
         }
 
@@ -1305,7 +1197,7 @@ namespace uhr.info.detector
         {
             string orgCode = txtOrgCode.Text.Trim();
             string orgFolder = FindOrgSvnFolder(orgCode);
-            System.Diagnostics.Debug.WriteLine($"見つけたorgFolderの元の値: '{orgFolder}'");
+            System.Diagnostics.Debug.WriteLine($"見つけたorgFolderの実際の値: '{orgFolder}'");
 
             string baseOrgUrl = $"{AppConfig.SVN_CUSTOMIZED_PATH}{orgFolder}";
             System.Diagnostics.Debug.WriteLine($"基機関URL: '{baseOrgUrl}'");
@@ -1331,7 +1223,7 @@ namespace uhr.info.detector
                 }
             }
 
-            // 優先順位: uhr > ROOT > 基ディレクトリ
+            // 優先順位: uhr > ROOT > 基本ディレクトリ
             if (!string.IsNullOrEmpty(uhrPath))
             {
                 System.Diagnostics.Debug.WriteLine($"uhrサブディレクトリを使用: {uhrPath}");
@@ -1344,22 +1236,22 @@ namespace uhr.info.detector
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"サブディレクトリが見つからない、基ディレクトリを使用: {baseOrgUrl}");
+                System.Diagnostics.Debug.WriteLine($"サブディレクトリが見つからない、基本ディレクトリを使用: {baseOrgUrl}");
                 return baseOrgUrl;
             }
         }
 
-        // 获取SVN中的所有文件列表
+        // SVN中のすべてのファイルリストを取得
         private List<string> GetAllFilesFromSvn(string svnUrl, string svnPath)
         {
             try
             {
                 var res = RunSvn(svnPath, $"list --xml -R \"{svnUrl}\"",
                                  AppConfig.SVN_COMMAND_TIMEOUT_MS * 5, Encoding.UTF8);
-                if (res.TimedOut) throw new Exception("SVN列表命令超时");
-                if (res.ExitCode != 0) throw new Exception($"SVN列表命令失败(ExitCode={res.ExitCode}): {res.Stderr}");
+                if (res.TimedOut) throw new Exception("SVNリストコマンドタイムアウト");
+                if (res.ExitCode != 0) throw new Exception($"SVNリストコマンド失敗(ExitCode={res.ExitCode}): {res.Stderr}");
                 if (string.IsNullOrWhiteSpace(res.Stdout))
-                    throw new Exception($"SVN命令未返回任何结果，请检查路径是否正确: {svnUrl}");
+                    throw new Exception($"SVNコマンドが何も結果を返しませんでした、パスが正しいかチェックしてください: {svnUrl}");
 
                 var xdoc = System.Xml.Linq.XDocument.Parse(res.Stdout);
                 return xdoc.Descendants("entry")
@@ -1370,51 +1262,51 @@ namespace uhr.info.detector
             }
             catch (Exception ex)
             {
-                SafeLog("DebugLog.txt", $"获取SVN文件列表失败: {ex.Message}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"SVNファイルリスト取得失敗: {ex.Message}\n");
                 return new List<string>();
             }
         }
 
-        // 查找与HASH匹配的文件在SVN中的完整路径
+        // HASHと一致するファイルのSVN中の完全パスを検索
         private string FindFileInSVNByHash(string fileName, string targetHash, string orgCode)
         {
             try
             {
                 string svnPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
 
-                // 先检查SVN可用性
+                // 先にSVN可用性をチェック
                 if (string.IsNullOrEmpty(GetSVNCodePath()))
                 {
                     MessageBox.Show("SVNのパスが取得できません。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return "";
                 }
 
-                // 构建SVN URL
+                // SVN URLを構築
                 string svnBaseUrl = GetSvnUrl();
                 System.Diagnostics.Debug.WriteLine($"SVN URL: {svnBaseUrl}");
 
-                // 缓存文件列表映射
+                // ファイルリストマッピングをキャッシュ
                 string cacheKey = svnBaseUrl;
 
                 if (!svnFileListCache.TryGetValue(cacheKey, out List<string> allFiles))
                 {
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 初回SVN全ファイルリスト取得中: {fileName}\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 初回SVN全ファイルリスト取得中: {fileName}\n");
 
                     allFiles = GetAllFilesFromSvn(svnBaseUrl, svnPath);
                     svnFileListCache[cacheKey] = allFiles;
 
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルキャッシュ完了: {allFiles.Count}個のファイルを発見\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルキャッシュ完了: {allFiles.Count}個のファイルを発見\n");
                 }
                 else
                 {
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNキャッシュ命中: {fileName} ({allFiles.Count}個のファイル)\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNキャッシュヒット: {fileName} ({allFiles.Count}個のファイル)\n");
                 }
 
-                // 查找所有同名 файлов
+                // 同名のすべてのファイルを検索
                 var candidates = allFiles.Where(file => System.IO.Path.GetFileName(file).Equals(fileName, StringComparison.OrdinalIgnoreCase)).ToList();
 
                 // デバッグ情報：SVNファイル一覧の内容を確認
-                System.Diagnostics.Debug.WriteLine($"SVNファイル一覧の最初の10個のファイル：");
+                System.Diagnostics.Debug.WriteLine($"SVNファイル一覧の最初の10個のファイル:");
                 foreach (var file in allFiles.Take(10))
                 {
                     System.Diagnostics.Debug.WriteLine($"  - {file}");
@@ -1427,42 +1319,42 @@ namespace uhr.info.detector
                     return "";
                 }
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] HASH比較中: {fileName} ({candidates.Count}個の候補)\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] HASH比較: {fileName} ({candidates.Count}個の候補)\n");
 
-                // 检查每个候选文件的HASH
+                // 各候補ファイルのHASHをチェック
                 for (int idx = 0; idx < candidates.Count; idx++)
                 {
                     try
                     {
                         var candidate = candidates[idx];
 
-                        // URL构造时要小心处理斜杠和编码
+                        // URL構築時はスラッシュとエンコーディングに注意
                         string fullSvnPath = svnBaseUrl.TrimEnd('/') + "/" + candidate;
 
                         if (string.IsNullOrWhiteSpace(fullSvnPath))
                         {
-                            SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 検索結果为空，跳过\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 検索結果が空、スキップ\n");
                             continue;
                         }
 
-                        // 详细的URL调试信息 - 特别标记hituyoushorui.htm
+                        // 詳細なURL構築情報 - 特にhituyoushorui.htm用
                         if (fileName.ToLower().Contains("hituyoushorui"))
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now}] *** 特殊ファイル *** URL構築: svnBaseUrl='{svnBaseUrl}', candidate='{candidate}', fullSvnPath='{fullSvnPath}'\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now}] *** 特殊ファイル *** URL構成: svnBaseUrl='{svnBaseUrl}', candidate='{candidate}', fullSvnPath='{fullSvnPath}'\n");
                             System.Diagnostics.Debug.WriteLine($"*** 特殊ファイル hituyoushorui *** URL: {fullSvnPath}");
                         }
                         else
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now}] URL構築: svnBaseUrl='{svnBaseUrl}', candidate='{candidate}', fullSvnPath='{fullSvnPath}'\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now}] URL構成: svnBaseUrl='{svnBaseUrl}', candidate='{candidate}', fullSvnPath='{fullSvnPath}'\n");
                         }
-                        System.Diagnostics.Debug.WriteLine($"下载完整SVN路径: '{fullSvnPath}'");
-                        System.Diagnostics.Debug.WriteLine($"candidate文件名: '{candidate}'");
+                        System.Diagnostics.Debug.WriteLine($"完全SVNパスをダウンロード: '{fullSvnPath}'");
+                        System.Diagnostics.Debug.WriteLine($"候補ファイル名: '{candidate}'");
 
-                        // URL 构造完得到 fullSvnPath 之后，用下面这一段替换原来的 tempFile 逻辑
+                        // URL構築完了でfullSvnPathを得た後、以下のセクションで元のtempFileロジックを置き換え
                         string fileHash = "";
                         bool ok = false;
 
-                        // 文本/脚本类优先走 cat
+                        // テキスト/スクリプト類は優先的にcatを使用
                         var ext = Path.GetExtension(fileName)?.ToLowerInvariant();
                         bool preferCat = ext == ".js" || ext == ".css" || ext == ".htm" || ext == ".html" ||
                                          ext == ".json" || ext == ".xml" || ext == ".txt" || ext == ".md";
@@ -1470,44 +1362,44 @@ namespace uhr.info.detector
                         if (preferCat)
                         {
                             ok = SafeTryCatHash(fullSvnPath, out fileHash);
-                            if (!ok) SafeLog("DebugLog.txt", $"[hash] cat失败→回退export: {fullSvnPath}\n");
+                            if (!ok) LogHelper.SafeLog("DebugLog.txt", $"[hash] cat失敗→exportに戻す: {fullSvnPath}\n");
                         }
 
-                        // 回退 export 求 hash
+                        // export + hashに戻す
                         if (!ok)
                         {
                             ok = SafeTryExportHash(fullSvnPath, fileName, out fileHash);
                         }
 
-                        // 失败就跳过，绝不继续后续操作
+                        // 失敗したらスキップ、以降の操作は継続しない
                         if (!ok || string.IsNullOrEmpty(fileHash))
                         {
-                            SafeLog("ErrorLog.txt", $"[hash] 取 hash 失败，跳过: {fullSvnPath}\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[hash] hash計算失敗、スキップ: {fullSvnPath}\n");
                             continue;
                         }
 
-                        // 命中即返回
+                        // ヒット時は即座に返す
                         if (!string.IsNullOrEmpty(targetHash) &&
                             string.Equals(fileHash, targetHash, StringComparison.OrdinalIgnoreCase))
                         {
-                            SafeLog("DebugLog.txt", $"[match] 命中: {fileName} == {fullSvnPath}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[match] ヒット: {fileName} == {fullSvnPath}\n");
                             return fullSvnPath;
                         }
 
                     }
                     catch (Exception ex)
                     {
-                        SafeLog("ErrorLog.txt", $"[candidate] 未知异常（已跳过）: {candidates[idx]}\n{ex}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[candidate] 未知の例外、既にスキップ済み: {candidates[idx]}\n{ex}\n");
                         continue;
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"未找到匹配HASH的文件'{fileName}'，目标HASH: {targetHash}");
+                System.Diagnostics.Debug.WriteLine($"一致するHASHのファイル'{fileName}'が見つかりません、目標HASH: {targetHash}");
                 return "";
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] FindFileInSVNByHash 例外: {fileName}, {ex.Message}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] FindFileInSVNByHash 例外: {fileName}, {ex.Message}\n");
                 return "";
             }
         }
@@ -1516,7 +1408,7 @@ namespace uhr.info.detector
         {
             ver = module = file = "";
             if (string.IsNullOrWhiteSpace(item)) return false;
-            // 版本（连续非空白） + 空格 + 模块名（Core|Salary|YearAdjust）+ 空格 + 文件名（其余全部）
+            // バージョン（連続非空白）+ スペース + モジュール名（Core|Salary|YearAdjust）+ スペース + ファイル名（残り全部）
             var m = System.Text.RegularExpressions.Regex.Match(item, @"^(?<ver>\S+)\s+(?<module>Core|Salary|YearAdjust)\s+(?<file>.+)$");
             if (!m.Success) return false;
             ver = m.Groups["ver"].Value.Trim();
@@ -1530,7 +1422,7 @@ namespace uhr.info.detector
             string svnBasePath = AppConfig.SVN_RELEASE_ARTIFACTS_PATH;
             string svnExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
 
-            // 选择该模块的关键字与子路径
+            // 选择该模块的关键字与子路征E
             string folderKeyword, modulePath;
             switch (moduleName)
             {
@@ -1547,38 +1439,38 @@ namespace uhr.info.detector
                     modulePath = AppConfig.YEAR_ADJUST_MODULE_PATH;
                     break;
                 default:
-                    throw new Exception($"未知模块: {moduleName}");
+                    throw new Exception($"未知のモジュール: {moduleName}");
             }
 
-            // 1) 在发布库根下找到该模块的根目录（包含关键字的那个目录名）
-            var rootDirectories = GetSvnSubDirectories(svnBasePath, svnExe);  // 已是 XML + UTF-8 解析
+            // 1) リリース成果物の根下で該当モジュールの根目録を見つける（キーワードを含むディレクトリ名）
+            var rootDirectories = GetSvnSubDirectories(svnBasePath, svnExe);  // 既に XML + UTF-8 解析済み
             var moduleRoot = rootDirectories.FirstOrDefault(d => d.Contains(folderKeyword));
             if (string.IsNullOrEmpty(moduleRoot))
-                throw new Exception($"{moduleName} 的根目录未找到（关键字: {folderKeyword}）");
+                throw new Exception($"{moduleName} の根目録が見つかりません（キーワード: {folderKeyword}）");
 
-            // 2) 拼出模块的版本父目录
+            // 2) モジュールのバージョン親ディレクトリを構成
             string moduleFullPath = $"{svnBasePath}/{moduleRoot}{modulePath}";
 
-            // 3) 列出该模块下的所有“版本目录”，并建立 显示版本 -> 真正目录名 的映射
-            var versionDirs = GetSvnSubDirectories(moduleFullPath, svnExe); // 纯目录名列表
+            // 3) モジュール下のすべての「バージョンディレクトリ」をリストアップし、表示バージョン → 実ディレクトリ名のマッピングを構築
+            var versionDirs = GetSvnSubDirectories(moduleFullPath, svnExe); // 純粋なディレクトリ名リスト
             if (versionDirs.Count == 0)
-                throw new Exception($"{moduleName} 没有任何版本目录");
+                throw new Exception($"{moduleName} にバージョンディレクトリがありません");
 
-            string prefix = AppConfig.VERSION_PREFIX;   // 你项目里已有
+            string prefix = AppConfig.VERSION_PREFIX;   // プロジェクトで既定済み
             var versionToFolder = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var folderName in versionDirs)
             {
                 string displayName = (!string.IsNullOrEmpty(prefix) && folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                                      ? folderName.Substring(prefix.Length)
                                      : folderName;
-                // 后写覆盖前写无所谓，名称一般唯一
+                // 後で上書きしても前でも関係なし、名称は一般的に唯一
                 versionToFolder[displayName] = folderName;
             }
 
             if (!versionToFolder.TryGetValue(version, out string folder))
-                throw new Exception($"{moduleName} 未找到版本 '{version}' 对应的目录（可用: {string.Join(", ", versionToFolder.Keys)}）");
+                throw new Exception($"{moduleName} バージョン '{version}' に対応するディレクトリが見つかりません（利用可能: {string.Join(", ", versionToFolder.Keys)}）");
 
-            // 4) 返回最终的版本目录 URL
+            // 4) 最終的なバージョンディレクトリURLを返す
             return $"{moduleFullPath}/{folder}";
         }
 
@@ -1636,7 +1528,7 @@ namespace uhr.info.detector
 
                 // 6. レポートボタンを有効化
                 cmdShowReport.Enabled = true;
-                tslStatus.Text = mergeFiles.Any() ? $"マージが必要なファイル: {mergeFiles.Count} 個" : "マージが必要なファイルはありません。";
+                tslStatus.Text = mergeFiles.Any() ? $"マージが必要なファイル: {mergeFiles.Count}個" : "マージが必要なファイルはありません。";
             }
             catch (OperationCanceledException)
             {
@@ -1740,7 +1632,7 @@ namespace uhr.info.detector
                     }
                 }
 
-                tslStatus.Text = $"バージョン情報 {versionCount} 個を取得しました。";
+                tslStatus.Text = $"バージョン情報 {versionCount}個を取得しました。";
 
                 // バージョン取得後、即座に背景色をチェック
                 SetVersionBackgroundColors();
@@ -1760,10 +1652,10 @@ namespace uhr.info.detector
             }
         }
 
-        // 補助メソッド：INSERT 文から CS_CPROPERTYVALUE フィールドの値を抽出（フィールド順序可変、フィールド名大文字小文字無視）
+        // 補助メソッド：INSERT 文からCS_CPROPERTYVALUE フィールドの値を抽出、フィールド順序可変、フィールド名大文字小文字無視
         private string ExtractValue(string insertLine)
         {
-            // 1. フィールド名部分とフィールド値部分を抽出
+            // 1. フィールド名部分・フィールド値部分を抽出
             // 想定フォーマット：INSERT INTO ... (<fields>) VALUES (<values>);
             var fieldsMatch = System.Text.RegularExpressions.Regex.Match(insertLine, "\\(([^\\)]*)\\)\\s*VALUES", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             var valuesMatch = System.Text.RegularExpressions.Regex.Match(insertLine, "VALUES\\s*\\(([^\\)]*)\\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1789,7 +1681,7 @@ namespace uhr.info.detector
 
         private string ExtractPropertyName(string insertLine)
         {
-            // 1. フィールド名部分とフィールド値部分を抽出
+            // 1. フィールド名部分・フィールド値部分を抽出
             // 想定フォーマット：INSERT INTO ... (<fields>) VALUES (<values>);
             var fieldsMatch = System.Text.RegularExpressions.Regex.Match(insertLine, "\\(([^\\)]*)\\)\\s*VALUES", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             var valuesMatch = System.Text.RegularExpressions.Regex.Match(insertLine, "VALUES\\s*\\(([^\\)]*)\\)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -1834,7 +1726,7 @@ namespace uhr.info.detector
             else
                 txtSalaryVersion.BackColor = Color.White;
 
-            // 年末調整バージョンのチェック（包含匹配，因为实际版本号是长串如"2.11.4+reigetsu2.11.4+shoumeisho2.10.2"）
+            // 年末調整バージョンのチェック：部分一致を含む、実際のバージョン番号は長い文字列（例："2.11.4+reigetsu2.11.4+shoumeisho2.10.2"）
             if (!string.IsNullOrEmpty(txtYearAdjustVersion.Text) &&
                 !string.IsNullOrEmpty(cboYearAdjustTargetVersion.Text) &&
                 txtYearAdjustVersion.Text.Contains(cboYearAdjustTargetVersion.Text))
@@ -1845,14 +1737,14 @@ namespace uhr.info.detector
 
         private void cmdShowReport_Click(object sender, EventArgs e)
         {
-            // 変数を収集
+            // 変数を収雁E
             string orgName = txtOrgName.Text.Trim();
             string fwVersion = txtFWVersion.Text.Trim();
             string coreVersion = txtCoreVersion.Text.Trim();
             string salaryVersion = txtSalaryVersion.Text.Trim();
             string nenchoVersion = txtYearAdjustVersion.Text.Trim();
 
-            // 修正：客户化文件数量判断逻辑
+            // 修正：カスタマイズファイル数量判定ロジック
             int customizeFileCount = 0;
             if (!string.IsNullOrEmpty(lblCustomizedFileCount.Text) && lblCustomizedFileCount.Text != "")
             {
@@ -1861,7 +1753,7 @@ namespace uhr.info.detector
                     customizeFileCount = cnt;
                 }
             }
-            // 如果lblCustomizedFileCount为空，表示没有客户化文件，count应该是0
+            // lblCustomizedFileCountが空の場合、カスタマイズファイルがないことを示し、countは0とする
 
             var mergeFiles = new List<string>();
             foreach (var item in lstMergeNeedsFile.Items)
@@ -1879,10 +1771,10 @@ namespace uhr.info.detector
             if (!CheckSVNAvailable()) { return string.Empty; }
 
             // TODO: 2. 機関コードに基づいてモジュール位置を特定します。規則：XXXX_YYYYYYY_HRAP\uhr
-            //          XXXX は顧客コードです。名称が必ずしも正確とは限らないため、コードであいまい一致し、
+            //          XXXX は顧客コードです。名称が必ずしも正確とは限らないため、コードであいまい一致します。
             //          末尾が「_HRAP」のフォルダを特定してください。
             //          その配下の「uhr」フォルダが当該機関のモジュール位置です。
-            // SVNのサーバー接続確認
+            // SVNのサーバ接続確認
             string result = string.Empty;
             string svnPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
             string orgCode = txtOrgCode.Text.Trim();
@@ -1911,7 +1803,7 @@ namespace uhr.info.detector
             return result;
         }
 
-        // 清理临时文件夹
+        // 一時フォルダを削除
         private void CleanupTempFolders()
         {
             try
@@ -1923,11 +1815,11 @@ namespace uhr.info.detector
                     try
                     {
                         Directory.Delete(tempFolder, true);
-                        System.Diagnostics.Debug.WriteLine($"デレートされた一時フォルダー: {tempFolder}");
+                        System.Diagnostics.Debug.WriteLine($"作成された一時フォルダー: {tempFolder}");
                     }
                     catch
                     {
-                        // 一时フォルダーの削除に失敗した場合は無視
+                        // 一時フォルダーの削除に失敗した場合は無視
                     }
                 }
             }
@@ -1937,12 +1829,12 @@ namespace uhr.info.detector
             }
         }
 
-        // 下载 lstMergeNeedsFile 的全部项（不是选中）——真正落地时只用 TryFetchToFile 这一个通道
+        // lstMergeNeedsFile のすべての項目をダウンロード（選択項目ではなく）——実際の処理時は TryFetchToFile のみを使用
         private void DownloadAllFromMergeList()
         {
             if (lstMergeNeedsFile.Items.Count == 0)
             {
-                MessageBox.Show("列表为空，没有可下载的文件。");
+                MessageBox.Show("列表が空です。ダウンロード可能なファイルがありません。");
                 return;
             }
 
@@ -1952,13 +1844,13 @@ namespace uhr.info.detector
                 "UHR_MERGE_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
             Directory.CreateDirectory(outRoot);
 
-            int exportTimeout = AppConfig.SVN_COMMAND_TIMEOUT_MS * 3; // 大件给长一点
+            int exportTimeout = AppConfig.SVN_COMMAND_TIMEOUT_MS * 3; // 大きいファイルには長めに
             int catTimeout = AppConfig.SVN_COMMAND_TIMEOUT_MS;
 
             int ok = 0, ng = 0;
 
-            // 为减少远端调用：缓存 版本目录URL → 文件清单
-            // ValueTuple需要使用默认的EqualityComparer，不能直接用StringComparer
+            // リモート負荷を減らすため、バージョンディレクトリURLをキャッシュ → ファイル削除
+            // ValueTupleはデフォルトのEqualityComparerを使用する必要があり、StringComparerは直接使用できない
             var versionUrlCache = new Dictionary<(string module, string ver), string>();
             var fileListCache = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -1968,42 +1860,42 @@ namespace uhr.info.detector
                 {
                     Application.DoEvents();
 
-                    // 列表项格式："{verPadded} {modulePadded} {file}"
+                    // リスト項目フォーマット: "{verPadded} {modulePadded} {file}"
                     if (!TryParseMergeListItem(lstMergeNeedsFile.Items[i].ToString(), out var ver, out var module, out var fileName))
                     {
-                        SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 解析列表项失败，跳过：{lstMergeNeedsFile.Items[i]}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] リスト項目の解析失敗、スキップ: {lstMergeNeedsFile.Items[i]}\n");
                         ng++;
                         continue;
                     }
 
 
-                    // 1) 定位“模块+版本”的远端版本目录 URL（已实现的工具函数）
+                    // 1) 「モジュール・バージョン」のリモートバージョンディレクトリURLを特定（既実装の補助関数）
                     if (!versionUrlCache.TryGetValue((module, ver), out var versionUrl))
                     {
-                        versionUrl = ResolveModuleVersionUrl(module, ver); // e.g. .../<模块>/<v4.18.4 或 4.18.4>
+                        versionUrl = ResolveModuleVersionUrl(module, ver); // e.g. .../<モジュール>/<v4.18.4 または 4.18.4>
                         versionUrlCache[(module, ver)] = versionUrl;
                     }
 
-                    // 2) 在该版本目录下拿“全部文件相对路径”清单（XML -R，UTF-8；你已实现）
+                    // 2) 該当バージョンディレクトリ下の「全ファイルの相対パス」リストを取得（XML -R、UTF-8、既実装済み）
                     if (!fileListCache.TryGetValue(versionUrl, out var relFiles))
                     {
                         relFiles = GetSvnFileListXmlRecursive(versionUrl, svnExe);
                         fileListCache[versionUrl] = relFiles;
                     }
 
-                    // 3) 用“裸文件名”匹配（通常命中 1 个；若多个相同文件名，全部下载）
+                    // 3) 「ファイル名のみ」でマッチング（通常1個ヒット、複数同名ファイルがあれば全部ダウンロード）
                     var matches = relFiles.Where(p => Path.GetFileName(p)
                                            .Equals(fileName, StringComparison.OrdinalIgnoreCase))
                                            .ToList();
 
                     if (matches.Count == 0)
                     {
-                        SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 版本中未找到同名文件：{fileName} @ {module} {ver}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] バージョン中に同名ファイルが見つかりません: {fileName} @ {module} {ver}\n");
                         ng++;
-                        continue; // ★短路
+                        continue; // ☁E��路
                     }
 
-                    // 4) 逐个匹配项落地下载 —— 统一通过 TryFetchToFile
+                    // 4) 逐个匹配项落地下载 — E统一通迁ETryFetchToFile
                     foreach (var rel in matches)
                     {
                         string url = versionUrl.TrimEnd('/') + "/" + rel.Replace("\\", "/");
@@ -2013,23 +1905,23 @@ namespace uhr.info.detector
                         bool fetched = TryFetchToFile(svnExe, url, local, exportTimeout, catTimeout);
                         if (!fetched)
                         {
-                            SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗(跳过): {url}\n");
-                            ng++;                 // 计入失败
-                            continue;             // ★ 失败短路，直接处理下一个文件
+                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗、スキップ: {url}\n");
+                            ng++;                 // 失敗数にカウント
+                            continue;             // ★失敗はショートカット、次のファイルへ直接進む
                         }
 
-                        ok++;                     // 只有成功才 +1
+                        ok++;                     // 成功した場合のみ +1
 
                     }
                 }
                 catch (Exception ex)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 单项处理异常(已跳过): {lstMergeNeedsFile.Items[i]}\n{ex}\n");
-                    continue; // ★关键：失败不停机，只跳过该文件
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] 単項処理例外(既にスキップ): {lstMergeNeedsFile.Items[i]}\n{ex}\n");
+                    continue; // ★重要：失敗しても停止せず、ファイルのみスキップ
                 }
             }
 
-            MessageBox.Show($"下载完成：成功 {ok} 个，失败 {ng} 个。\n保存到：{outRoot}", "完成",
+            MessageBox.Show($"ダウンロード完了：成功{ok}個、失敗{ng}個\n保存先：{outRoot}", "完了",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -2037,7 +1929,7 @@ namespace uhr.info.detector
 
         private void cmdFilePrepare_Click(object sender, EventArgs e)
         {
-            // 基本验证
+            // 基本検証
             string svnExe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
             if (!System.IO.File.Exists(svnExe))
             {
@@ -2060,18 +1952,18 @@ namespace uhr.info.detector
                 return;
             }
 
-            // 禁用按钮,显示忙状态
+            // 禁用按钮,显示忙状态E
             cmdFilePrepare.Enabled = false;
             this.Cursor = Cursors.WaitCursor;
             _isTaskRunning = true;
 
             SimpleSvnHelper.CleanupTempFolders();
-            System.IO.File.WriteAllText("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === カスタマイズファイル処理開始（フォアグラウンドスレッド版） ===\n");
+            System.IO.File.WriteAllText("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === カスタマイズファイル処理開始（フォアグラウンドスレッド版）===\n");
 
-            // 使用前台线程而不是Task.Run(后台线程),防止应用程序意外退出
+            // フォアグラウンドスレッドを使用（Task.Run（バックグラウンドスレッド）ではなく）、アプリケーションの意図しない終了を防止
             var thread = new System.Threading.Thread(() =>
             {
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド開始、ID={System.Threading.Thread.CurrentThread.ManagedThreadId}, IsBackground={System.Threading.Thread.CurrentThread.IsBackground}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド開始、ID={System.Threading.Thread.CurrentThread.ManagedThreadId}, IsBackground={System.Threading.Thread.CurrentThread.IsBackground}\n");
 
                 (int, int, string) result = (0, 0, "");
                 Exception threadException = null;
@@ -2079,18 +1971,18 @@ namespace uhr.info.detector
                 try
                 {
                     result = ProcessFilesInBackground(svnExe, orgCode, orgName, svnBaseUrl);
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground完了、結果を取得\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground完了、結果を取得\n");
                 }
                 catch (Exception ex)
                 {
                     threadException = ex;
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] スレッド例外: {ex.Message}\n{ex.StackTrace}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] スレッド例外: {ex.Message}\n{ex.StackTrace}\n");
                 }
 
                 // 检查窗体是否还存在
                 if (this.IsDisposed || !this.IsHandleCreated)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォームが既に破棄されています\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォームが既に破棄されています\n");
                     return;
                 }
 
@@ -2104,7 +1996,7 @@ namespace uhr.info.detector
 
                         if (threadException != null)
                         {
-                            SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] エラーをUI表示\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] エラーをUI表示\n");
                             MessageBox.Show($"処理中にエラーが発生しました。\n{threadException.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             tslStatus.Text = "エラーが発生しました";
                         }
@@ -2117,7 +2009,7 @@ namespace uhr.info.detector
                             if (successCount > 0)
                             {
                                 MessageBox.Show(
-                                    $"処理が完了しました。\n成功: {successCount}個\n失敗: {notFoundCount}個\n保存先: {saveDir}",
+                                    $"処理完了しました。\n成功: {successCount}個\n失敗: {notFoundCount}個\n保存先: {saveDir}",
                                     "完了",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Information);
@@ -2128,7 +2020,7 @@ namespace uhr.info.detector
                                 }
                                 catch (Exception ex)
                                 {
-                                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] エクスプローラー起動失敗: {ex.Message}\n");
+                                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] エクスプローラー起動失敗: {ex.Message}\n");
                                 }
                             }
                             else
@@ -2136,24 +2028,24 @@ namespace uhr.info.detector
                                 MessageBox.Show("ファイルが見つかりませんでした。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }
 
-                            tslStatus.Text = $"完了: {successCount}個成功, {notFoundCount}個失敗";
+                            tslStatus.Text = $"完了: {successCount}個成功、{notFoundCount}個失敗";
                         }
 
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] UI更新完了\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] UI更新完了\n");
                     }));
                 }
                 catch (Exception invokeEx)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] Invoke例外: {invokeEx.Message}\n{invokeEx.StackTrace}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] Invoke例外: {invokeEx.Message}\n{invokeEx.StackTrace}\n");
                 }
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド終了\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド終了\n");
             });
 
-            thread.IsBackground = false;  // 设为前台线程，防止应用程序在线程运行时退出
+            thread.IsBackground = false;  // フォアグラウンドスレッドに設定、スレッド実行中のアプリケーション終了を防止
             thread.Start();
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド起動完了\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド起動完了\n");
         }
 
         private void UpdateStatus(string message)
@@ -2171,14 +2063,14 @@ namespace uhr.info.detector
             }
             catch (Exception ex) 
             { 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ステータス更新失敗: {ex.Message}\n"); 
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ステータス更新失敗: {ex.Message}\n"); 
             }
         }
 
-        static string PSEscape(string s) => "'" + s.Replace("'", "''") + "'";  // 单引号转义
+        static string PSEscape(string s) => "'" + s.Replace("'", "''") + "'";  // 単一引用符をエスケープ
 
         /// <summary>
-        /// 为.class文件下载对应的.java源文件
+        /// .classファイルに対応する.javaソースファイルをダウンロード
         /// </summary>
         private void DownloadCorrespondingJavaFile(
             string classFilePath,
@@ -2190,14 +2082,14 @@ namespace uhr.info.detector
         {
             try
             {
-                // 将.class文件路径转换为.java文件路径
-                // 例如: WEB-INF/classes/com/example/Foo.class -> WEB-INF/classes/com/example/Foo.java
+                // .classファイルパスを.javaファイルパスに変換
+                // 例: WEB-INF/classes/com/example/Foo.class -> WEB-INF/classes/com/example/Foo.java
                 string javaFilePath = classFilePath.Substring(0, classFilePath.Length - 6) + ".java";
                 string javaFileName = Path.GetFileName(javaFilePath);
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .classファイル検出、対応する.javaファイルを検索: {javaFileName}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .classファイル検出、対応する.javaファイルを検索: {javaFileName}\n");
 
-                // 在SVN文件列表中查找对应的.java文件
+                // SVNファイルリスト中で対応する.javaファイルを検索
                 var javaFile = allSvnFiles.FirstOrDefault(f => f.Equals(javaFilePath, StringComparison.OrdinalIgnoreCase));
 
                 if (javaFile != null)
@@ -2205,11 +2097,11 @@ namespace uhr.info.detector
                     string svnFileUrl = $"{svnBaseUrl.TrimEnd('/')}/{javaFile}";
                     string localFilePath = Path.Combine(workTempDir, javaFile.Replace('/', Path.DirectorySeparatorChar));
 
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード試行: {javaFile}\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード試衁E {javaFile}\n");
 
                     if (svnHelper.DownloadSingleFile(svnFileUrl, localFilePath))
                     {
-                        // 复制到目标目录，保留相对路径
+                        // 目標ディレクトリにコピー、相対パスを保持
                         string targetPath = Path.Combine(saveDir, javaFile.Replace('/', Path.DirectorySeparatorChar));
                         string targetDir = Path.GetDirectoryName(targetPath);
 
@@ -2217,28 +2109,28 @@ namespace uhr.info.detector
                             Directory.CreateDirectory(targetDir);
 
                         File.Copy(localFilePath, targetPath, true);
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイル保存成功: {javaFileName}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイル保存成功: {javaFileName}\n");
                     }
                     else
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード失敗: {javaFile}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード失敗: {javaFile}\n");
                     }
                 }
                 else
                 {
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 対応する.javaファイルがSVNに見つかりません: {javaFilePath}\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 対応する.javaファイルがSVNに見つかりません: {javaFilePath}\n");
                 }
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード例外: {ex.Message}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] .javaファイルダウンロード例外: {ex.Message}\n");
             }
         }
 
         /// <summary>
-        /// 通用的按需下载方法 - 根据文件名列表从SVN按需下载并验证哈希
+        /// 汎用オンデマンドダウンロード方法 - ファイル名のリストに基づいてSVNからオンデマンドダウンロードしハッシュ検証
         /// </summary>
-        /// <param name="downloadAllMatches">true=下载所有哈希匹配的文件（用于merge），false=只下载第一个匹配（用于customized）</param>
+        /// <param name="downloadAllMatches">true=ハッシュが一致するすべてのファイルをダウンロード（merge用）、false=最初の一致のみダウンロード（customized用）</param>
         private (int successCount, List<string> notFoundFiles) DownloadFilesOnDemand(
             List<string> fileNames,
             string svnBaseUrl,
@@ -2251,82 +2143,82 @@ namespace uhr.info.detector
             var notFoundFiles = new List<string>();
             int successCount = 0;
 
-            // 第1段階：获取SVN文件列表（轻量级操作）
+            // 第1段階：SVNファイルリストを取得（軽量級操作）
             List<string> allSvnFiles;
             if (!svnFileListCache.TryGetValue(svnBaseUrl, out allSvnFiles))
             {
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルリスト取得中...\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルリスト取得中...\n");
                 allSvnFiles = GetAllFilesFromSvn(svnBaseUrl, svnExe);
                 svnFileListCache[svnBaseUrl] = allSvnFiles;
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイル数: {allSvnFiles.Count}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイル数: {allSvnFiles.Count}\n");
             }
             else
             {
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルリストキャッシュ使用: {allSvnFiles.Count}個\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNファイルリストキャッシュ使用: {allSvnFiles.Count}個\n");
             }
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 処理対象ファイル数: {fileNames.Count}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 処理対象ファイル数: {fileNames.Count}\n");
 
-            // 第2段階：按需下载并验证哈希
+            // 第2段階：オンデマンドダウンロードとハッシュ検証
             for (int i = 0; i < fileNames.Count; i++)
             {
                 try
                 {
                     string fileName = fileNames[i];
-                    if (fileName.Contains("情報が見つかりません"))
+                    if (fileName.Contains("惁E��が見つかりません"))
                         continue;
 
                     UpdateStatus($"ダウンロード中: {fileName} ({i + 1}/{fileNames.Count})");
 
                     if (!moduleInfoCache.TryGetValue(fileName, out var fileInfo))
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] キャッシュなし: {fileName}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] キャッシュなし: {fileName}\n");
                         notFoundFiles.Add($"{fileName} (キャッシュなし)");
                         continue;
                     }
 
-                    // 在SVN文件列表中查找同名文件
+                    // SVNファイルリスト中で同名ファイルを検索
                     var matchingFiles = allSvnFiles.Where(f => Path.GetFileName(f).Equals(fileName, StringComparison.OrdinalIgnoreCase)).ToList();
 
                     if (matchingFiles.Count == 0)
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNで見つかりません: {fileName}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVNで見つかりません: {fileName}\n");
                         notFoundFiles.Add($"{fileName} (SVNで見つかりません)");
                         continue;
                     }
 
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] {fileName}の候補: {matchingFiles.Count}個\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] {fileName}の候裁E {matchingFiles.Count}個\n");
 
                     bool matched = false;
                     int matchCount = 0;
                     foreach (var svnFilePath in matchingFiles)
                     {
-                        // 下载文件到临时目录
+                        // ファイルを一時ディレクトリにダウンロード
                         string svnFileUrl = $"{svnBaseUrl.TrimEnd('/')}/{svnFilePath}";
                         string localFilePath = Path.Combine(workTempDir, svnFilePath.Replace('/', Path.DirectorySeparatorChar));
 
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード試行: {svnFilePath}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード試行: {svnFilePath}\n");
 
                         if (!svnHelper.DownloadSingleFile(svnFileUrl, localFilePath))
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗: {svnFilePath}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗: {svnFilePath}\n");
                             continue;
                         }
 
-                        // 验证哈希
+                        // ハッシュを検証
                         string actualHash = svnHelper.CalculateHash(localFilePath);
 
                         if (string.IsNullOrEmpty(actualHash))
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ計算失敗: {localFilePath}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ計算失敗: {localFilePath}\n");
                             continue;
                         }
 
                         if (actualHash.Equals(fileInfo.HashValue, StringComparison.OrdinalIgnoreCase))
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ一致: {fileName}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ一致: {fileName}\n");
 
-                            // 复制到目标目录，保留相对路径
+                            // 目標ディレクトリにコピー、相対パスを保持
                             string targetPath = Path.Combine(saveDir, svnFilePath.Replace('/', Path.DirectorySeparatorChar));
                             string targetDir = Path.GetDirectoryName(targetPath);
 
@@ -2338,21 +2230,21 @@ namespace uhr.info.detector
                             matched = true;
                             matchCount++;
 
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 保存成功: {fileName} ({successCount}個目)\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 保存成功: {fileName} ({successCount}個目)\n");
 
-                            // 如果是.class文件，尝试下载对应的.java文件
+                            // .classファイルの場合、対応する.javaファイルのダウンロードを試みる
                             if (fileName.EndsWith(".class", StringComparison.OrdinalIgnoreCase))
                             {
                                 DownloadCorrespondingJavaFile(svnFilePath, svnBaseUrl, allSvnFiles, workTempDir, saveDir, svnHelper);
                             }
 
-                            // 如果不需要下载所有匹配，找到第一个就退出
+                            // すべてのマッチをダウンロードする必要がない場合、最初の1個を見つけたら終了
                             if (!downloadAllMatches)
                                 break;
                         }
                         else
                         {
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ不一致: expected={fileInfo.HashValue}, actual={actualHash}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ハッシュ不一致: expected={fileInfo.HashValue}, actual={actualHash}\n");
                         }
                     }
 
@@ -2362,24 +2254,24 @@ namespace uhr.info.detector
                     }
                     else if (downloadAllMatches && matchCount > 1)
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] {fileName}: {matchCount}個のマッチファイルを保存\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] {fileName}: {matchCount}個のマッチファイルを保存\n");
                     }
                 }
                 catch (Exception fileEx)
                 {
                     string errorFileName = fileNames[i];
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ファイル処理例外: {errorFileName}\n{fileEx.Message}\n{fileEx.StackTrace}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ファイル処理例外: {errorFileName}\n{fileEx.Message}\n{fileEx.StackTrace}\n");
                     notFoundFiles.Add($"{errorFileName} (処理例外)");
                 }
             }
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード完了: {successCount}個成功\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード完了: {successCount}個成功\n");
             return (successCount, notFoundFiles);
         }
 
         private (int successCount, int notFoundCount, string saveDir) ProcessFilesInBackground(string svnExe, string orgCode, string orgName, string svnBaseUrl)
         {
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground開始 - スレッドID: {System.Threading.Thread.CurrentThread.ManagedThreadId}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground開始 - スレッドID: {System.Threading.Thread.CurrentThread.ManagedThreadId}\n");
 
             string workTempDir = null;
 
@@ -2393,18 +2285,18 @@ namespace uhr.info.detector
             }
             Directory.CreateDirectory(saveDir);
 
-            var svnHelper = new SimpleSvnHelper(svnExe, msg => SafeLog("DebugLog.txt", msg + "\n"));
+            var svnHelper = new SimpleSvnHelper(svnExe, msg => LogHelper.SafeLog("DebugLog.txt", msg + "\n"));
 
             UpdateStatus("SVNファイルリスト取得中...");
 
             workTempDir = Path.Combine(Path.GetTempPath(), "uhr_ondemand_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
             Directory.CreateDirectory(workTempDir);
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 作業用一時フォルダ: {workTempDir}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 作業用一時フォルダ: {workTempDir}\n");
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === 按需下载模式：仅下载需要的文件 ===\n");
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN URL: {svnBaseUrl}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === オンデマンドダウンロードモード：必要なファイルのみダウンロード ===\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN URL: {svnBaseUrl}\n");
 
-            // 获取需要下载的文件列表
+            // ダウンロードが必要なファイルリストを取得
             List<string> fileNames = new List<string>();
             this.Invoke(new Action(() =>
             {
@@ -2414,10 +2306,10 @@ namespace uhr.info.detector
                 }
             }));
 
-            // 调用通用下载方法
+            // 汎用ダウンロード方法を呼び出し
             var (successCount, notFoundFiles) = DownloadFilesOnDemand(fileNames, svnBaseUrl, svnExe, workTempDir, saveDir, svnHelper);
 
-            // 临时文件夹清理已移至finally块，确保无论成功失败都会清理
+            // 一時フォルダの削除は既にfinallyブロックに移動済み、成功・失敗に関わらず削除を保証
 
             if (notFoundFiles.Count > 0 && !string.IsNullOrEmpty(saveDir))
             {
@@ -2438,17 +2330,17 @@ namespace uhr.info.detector
                 }
             }
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground正常終了\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground正常終了\n");
                 return (successCount, notFoundFiles.Count, saveDir);
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground例外: {ex.Message}\n{ex.StackTrace}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessFilesInBackground例外: {ex.Message}\n{ex.StackTrace}\n");
                 throw;
             }
             finally
             {
-                // 无论成功还是失败，都清理临时文件夹
+                // 成功・失敗に関わらず、一時フォルダを削除
                 if (!string.IsNullOrEmpty(workTempDir))
                 {
                     try
@@ -2456,12 +2348,12 @@ namespace uhr.info.detector
                         if (Directory.Exists(workTempDir))
                         {
                             Directory.Delete(workTempDir, true);
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除: {workTempDir}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除: {workTempDir}\n");
                         }
                     }
                     catch (Exception cleanEx)
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除失敗: {cleanEx.Message}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除失敗: {cleanEx.Message}\n");
                     }
                 }
             }
@@ -2472,7 +2364,7 @@ namespace uhr.info.detector
         /// </summary>
         private (int successCount, int notFoundCount, string saveDir) ProcessMergeFilesInBackground(string svnExe, string orgCode, string orgName, string svnBaseUrl)
         {
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground開始 - スレッドID: {System.Threading.Thread.CurrentThread.ManagedThreadId}\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground開始 - スレッドID: {System.Threading.Thread.CurrentThread.ManagedThreadId}\n");
 
             string workTempDir = null;
 
@@ -2486,18 +2378,18 @@ namespace uhr.info.detector
                 }
                 Directory.CreateDirectory(saveDir);
 
-                var svnHelper = new SimpleSvnHelper(svnExe, msg => SafeLog("DebugLog.txt", msg + "\n"));
+                var svnHelper = new SimpleSvnHelper(svnExe, msg => LogHelper.SafeLog("DebugLog.txt", msg + "\n"));
 
                 UpdateStatus("SVNファイルリスト取得中...");
 
                 workTempDir = Path.Combine(Path.GetTempPath(), "uhr_merge_ondemand_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
                 Directory.CreateDirectory(workTempDir);
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 作業用一時フォルダ: {workTempDir}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 作業用一時フォルダ: {workTempDir}\n");
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === 按需下载模式（マージファイル）：仅下载需要的文件 ===\n");
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN URL: {svnBaseUrl}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === オンデマンドダウンロードモード（マージファイル）：必要なファイルのみダウンロード ===\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SVN URL: {svnBaseUrl}\n");
 
-                // 从lstMergeNeedsFile获取文件列表（需要在UI线程中读取）
+                // lstMergeNeedsFileからファイルリストを取得、UIスレッドで読み取る必要あり
                 List<(string ver, string module, string fileName)> mergeFileList = new List<(string, string, string)>();
                 this.Invoke(new Action(() =>
                 {
@@ -2510,13 +2402,13 @@ namespace uhr.info.detector
                     }
                 }));
 
-                // 提取文件名列表
+                // ファイル名のリストを抽出
                 List<string> fileNames = mergeFileList.Select(x => x.fileName).ToList();
 
-                // 调用通用下载方法（merge模式：下载所有哈希匹配的文件）
+                // 汎用ダウンロード方法を呼び出し（merge モード：ハッシュが一致するすべてのファイルをダウンロード）
                 var (successCount, notFoundFiles) = DownloadFilesOnDemand(fileNames, svnBaseUrl, svnExe, workTempDir, saveDir, svnHelper, downloadAllMatches: true);
 
-                // 临时文件夹清理已移至finally块，确保无论成功失败都会清理
+                // 一時フォルダの削除は既にfinallyブロックに移動済み、成功・失敗に関わらず削除を保証
 
                 if (notFoundFiles.Count > 0 && !string.IsNullOrEmpty(saveDir))
                 {
@@ -2537,17 +2429,17 @@ namespace uhr.info.detector
                     }
                 }
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground正常終了\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground正常終了\n");
                 return (successCount, notFoundFiles.Count, saveDir);
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground例外: {ex.Message}\n{ex.StackTrace}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground例外: {ex.Message}\n{ex.StackTrace}\n");
                 throw;
             }
             finally
             {
-                // 无论成功还是失败，都清理临时文件夹
+                // 成功・失敗に関わらず、一時フォルダを削除
                 if (!string.IsNullOrEmpty(workTempDir))
                 {
                     try
@@ -2555,66 +2447,66 @@ namespace uhr.info.detector
                         if (Directory.Exists(workTempDir))
                         {
                             Directory.Delete(workTempDir, true);
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除: {workTempDir}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除: {workTempDir}\n");
                         }
                     }
                     catch (Exception cleanEx)
                     {
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除失敗: {cleanEx.Message}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] [Finally] 作業用フォルダ削除失敗: {cleanEx.Message}\n");
                     }
                 }
             }
         }
 
         /// <summary>
-        /// 简单的文件查找方法 - 返回第一个匹配的文件URL（不验证哈希，留到下载后验证）
+        /// シンプルなファイル検索方法 - 最初に一致したファイルURLを返す、ハッシュ検証はせず、ダウンロード後に検証する
         /// </summary>
         private string FindFileInSVNByHashSimple(string svnBaseUrl, string fileName, string targetHash, SimpleSvnHelper svnHelper)
         {
             try
             {
-                // 获取文件列表
+                // ファイルリストを取得
                 if (!svnFileListCache.TryGetValue(svnBaseUrl, out List<string> allFiles))
                 {
                     allFiles = GetAllFilesFromSvn(svnBaseUrl, svnHelper.svnExePath);
                     svnFileListCache[svnBaseUrl] = allFiles;
                 }
 
-                // 查找同名文件 - 返回第一个匹配的
+                // 查找同名斁E�� - 返回第一个匹配的
                 var candidate = allFiles.FirstOrDefault(file => Path.GetFileName(file).Equals(fileName, StringComparison.OrdinalIgnoreCase));
 
                 if (candidate == null)
                     return null;
 
                 string fullUrl = svnBaseUrl.TrimEnd('/') + "/" + candidate;
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 候補発見: {fileName} -> {fullUrl}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 候補発要E {fileName} -> {fullUrl}\n");
                 return fullUrl;
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] FindFileInSVNByHashSimple エラー: {fileName}\n{ex.Message}\n{ex.StackTrace}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] FindFileInSVNByHashSimple エラー: {fileName}\n{ex.Message}\n{ex.StackTrace}\n");
                 return null;
             }
         }
 
         /// <summary>
-        /// 从SVN路径中提取相对路径
+        /// SVNパスから相対パスを抽出
         /// </summary>
         /// <summary>
-        /// 从SVN路径中提取uhr或ROOT之后的相对路径（不包括uhr或ROOT本身）
-        /// 例如: "v1.2.3/uhr/WEB-INF/classes/Foo.class" -> "WEB-INF/classes/Foo.class"
+        /// SVNパスからuhrまたはROOT以降の相対パスを抽出、uhrまたはROOT自体は含まない
+        /// 例: "v1.2.3/uhr/WEB-INF/classes/Foo.class" -> "WEB-INF/classes/Foo.class"
         /// </summary>
         private string ExtractRelativePathFromUhrOrRoot(string svnPath)
         {
             if (svnPath.Contains("/uhr/"))
             {
                 int idx = svnPath.IndexOf("/uhr/");
-                return svnPath.Substring(idx + 5); // /uhr/ 之后的部分
+                return svnPath.Substring(idx + 5); // /uhr/ 之后皁E��刁E
             }
             else if (svnPath.Contains("/ROOT/"))
             {
                 int idx = svnPath.IndexOf("/ROOT/");
-                return svnPath.Substring(idx + 6); // /ROOT/ 之后的部分
+                return svnPath.Substring(idx + 6); // /ROOT/ 之后皁E��刁E
             }
             return null; // 既不包含uhr也不包含ROOT
         }
@@ -2645,7 +2537,7 @@ namespace uhr.info.detector
                 return;
             }
 
-            // 基本验证
+            // 基本検証
             string svnExe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
             if (!System.IO.File.Exists(svnExe))
             {
@@ -2669,18 +2561,18 @@ namespace uhr.info.detector
                 return;
             }
 
-            // 禁用按钮,显示忙状态
+            // 禁用按钮,显示忙状态E
             cmdMergeFilePrepare.Enabled = false;
             this.Cursor = Cursors.WaitCursor;
             _isTaskRunning = true;
 
             SimpleSvnHelper.CleanupTempFolders();
-            System.IO.File.WriteAllText("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === マージファイル処理開始（フォアグラウンドスレッド版） ===\n");
+            System.IO.File.WriteAllText("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] === マージファイル処理開始（フォアグラウンドスレッド版）===\n");
 
-            // 使用前台线程而不是Task.Run(后台线程),防止应用程序意外退出
+            // フォアグラウンドスレッドを使用（Task.Run（バックグラウンドスレッド）ではなく）、アプリケーションの意図しない終了を防止
             var thread = new System.Threading.Thread(() =>
             {
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド開始、ID={System.Threading.Thread.CurrentThread.ManagedThreadId}, IsBackground={System.Threading.Thread.CurrentThread.IsBackground}\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド開始、ID={System.Threading.Thread.CurrentThread.ManagedThreadId}, IsBackground={System.Threading.Thread.CurrentThread.IsBackground}\n");
 
                 (int, int, string) result = (0, 0, "");
                 Exception threadException = null;
@@ -2688,18 +2580,18 @@ namespace uhr.info.detector
                 try
                 {
                     result = ProcessMergeFilesInBackground(svnExe, orgCode, orgName, svnBaseUrl);
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground完了、結果を取得\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] ProcessMergeFilesInBackground完了、結果を取得\n");
                 }
                 catch (Exception ex)
                 {
                     threadException = ex;
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] スレッド例外: {ex.Message}\n{ex.StackTrace}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] スレッド例外: {ex.Message}\n{ex.StackTrace}\n");
                 }
 
                 // 检查窗体是否还存在
                 if (this.IsDisposed || !this.IsHandleCreated)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォームが既に破棄されています\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォームが既に破棄されています\n");
                     return;
                 }
 
@@ -2713,7 +2605,7 @@ namespace uhr.info.detector
 
                         if (threadException != null)
                         {
-                            SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] エラーをUI表示\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] エラーをUI表示\n");
                             MessageBox.Show($"処理中にエラーが発生しました。\n{threadException.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                             tslStatus.Text = "エラーが発生しました";
                         }
@@ -2726,7 +2618,7 @@ namespace uhr.info.detector
                             if (successCount > 0)
                             {
                                 MessageBox.Show(
-                                    $"処理が完了しました。\n成功: {successCount}個\n失敗: {notFoundCount}個\n保存先: {saveDir}",
+                                    $"処理完了しました。\n成功: {successCount}個\n失敗: {notFoundCount}個\n保存先: {saveDir}",
                                     "完了",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Information);
@@ -2737,7 +2629,7 @@ namespace uhr.info.detector
                                 }
                                 catch (Exception ex)
                                 {
-                                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] エクスプローラー起動失敗: {ex.Message}\n");
+                                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] エクスプローラー起動失敗: {ex.Message}\n");
                                 }
                             }
                             else
@@ -2745,24 +2637,24 @@ namespace uhr.info.detector
                                 MessageBox.Show("ファイルが見つかりませんでした。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }
 
-                            tslStatus.Text = $"完了: {successCount}個成功, {notFoundCount}個失敗";
+                            tslStatus.Text = $"完了: {successCount}個成功、{notFoundCount}個失敗";
                         }
 
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] UI更新完了\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] UI更新完了\n");
                     }));
                 }
                 catch (Exception invokeEx)
                 {
-                    SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] Invoke例外: {invokeEx.Message}\n{invokeEx.StackTrace}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] Invoke例外: {invokeEx.Message}\n{invokeEx.StackTrace}\n");
                 }
 
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド終了\n");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド終了\n");
             });
 
-            thread.IsBackground = false;  // 设为前台线程，防止应用程序在线程运行时退出
+            thread.IsBackground = false;  // フォアグラウンドスレッドに設定、スレッド実行中のアプリケーション終了を防止
             thread.Start();
 
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド起動完了\n");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] フォアグラウンドスレッド起動完了\n");
         }
 
 
@@ -2789,16 +2681,16 @@ namespace uhr.info.detector
         }
 
 
-        // 安全尝试：用 svn cat 直接算 hash（永不抛异常）
+        // 安全な試行：svn catを使って直接hash計算、例外は投げない
         private bool SafeTryCatHash(string fullSvnPath, out string hash)
         {
             hash = "";
             var catStopwatch = Stopwatch.StartNew();
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] start: {fullSvnPath}");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] start: {fullSvnPath}");
             try
             {
                 var svnExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
-                // 并发排水以防 I/O 死锁
+                // 并发排水以防 I/O 死锁E
                 var psi = new ProcessStartInfo
                 {
                     FileName = svnExe,
@@ -2815,9 +2707,9 @@ namespace uhr.info.detector
                     p = Process.Start(psi);
                     if (p == null)
                     {
-                        SafeLog("ErrorLog.txt", $"[cat] Start失败: {fullSvnPath}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[cat] Start失敗: {fullSvnPath}\n");
                         catStopwatch.Stop();
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] fail(start): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] fail(start): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
                         return false;
                     }
 
@@ -2825,11 +2717,11 @@ namespace uhr.info.detector
                     var msErr = new MemoryStream();
                     var tOut = Task.Run(() => { 
                         try { p.StandardOutput.BaseStream.CopyTo(msOut); } 
-                        catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
+                        catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDOUT読み取り失敗: {ex.Message}\n"); } 
                     });
                     var tErr = Task.Run(() => { 
                         try { p.StandardError.BaseStream.CopyTo(msErr); } 
-                        catch (Exception ex) { SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
+                        catch (Exception ex) { LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] STDERR読み取り失敗: {ex.Message}\n"); } 
                     });
 
                     var start = DateTime.UtcNow;
@@ -2851,18 +2743,18 @@ namespace uhr.info.detector
                                 {
                                     Directory.CreateDirectory(Path.GetDirectoryName(fullSvnPath) ?? Path.GetTempPath());
                                     File.WriteAllText(fullSvnPath, catRes.Stdout, Encoding.UTF8);
-                                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fullSvnPath}\n");
-                                    return true; // ★ 成功：把 cat 的结果当作下载成功
+                                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] cat OK: {fullSvnPath}\n");
+                                    return true; // ★成功：catの結果をダウンロード成功として扱う
                                 }
 
                                 // cat失敗も記録
-                                SafeLog("ErrorLog.txt",
+                                LogHelper.SafeLog("ErrorLog.txt",
                                     $"[{DateTime.Now:HH:mm:ss}] cat NG Exit={catRes.ExitCode} Timeout={catRes.TimedOut}\nURL={fullSvnPath}\nSTDERR:\n{catRes.Stderr}\n");
                             }
 
-                            SafeLog("ErrorLog.txt", $"[cat] 超时: {fullSvnPath}\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[cat] 趁E��: {fullSvnPath}\n");
                             catStopwatch.Stop();
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] timeout: {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] timeout: {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
                             return false;
                         }
                         Application.DoEvents();
@@ -2872,9 +2764,9 @@ namespace uhr.info.detector
                     var stderr = Encoding.UTF8.GetString(msErr.ToArray());
                     if (p.ExitCode != 0)
                     {
-                        SafeLog("ErrorLog.txt", $"[cat] 失败({p.ExitCode}): {fullSvnPath}\nSTDERR: {Trim400(stderr)}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[cat] 失敗({p.ExitCode}): {fullSvnPath}\nSTDERR: {LogHelper.TruncateString(stderr)}\n");
                         catStopwatch.Stop();
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] fail(exit={p.ExitCode}): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] fail(exit={p.ExitCode}): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
                         return false;
                     }
 
@@ -2883,7 +2775,7 @@ namespace uhr.info.detector
                     {
                         hash = "empty_file_hash";
                         catStopwatch.Stop();
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] success(empty): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] success(empty): {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
                         return true;
                     }
 
@@ -2891,7 +2783,7 @@ namespace uhr.info.detector
                     var h = md5.ComputeHash(bytes);
                     hash = BitConverter.ToString(h).Replace("-", "").ToLowerInvariant();
                     catStopwatch.Stop();
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] success: {fullSvnPath}, bytes={bytes.Length}, hash={hash}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] success: {fullSvnPath}, bytes={bytes.Length}, hash={hash}, elapsed={catStopwatch.ElapsedMilliseconds}ms\n");
                     return true;
                 }
                 finally
@@ -2905,37 +2797,37 @@ namespace uhr.info.detector
                         }
                         p?.Dispose();
                     }
-                    catch { /* 清理失败忽略 */ }
+                    catch { /* 削除失敗は無視 */ }
                 }
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[cat] 例外: {fullSvnPath}\n{ex}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[cat] 例外: {fullSvnPath}\n{ex}\n");
                 catStopwatch.Stop();
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] exception: {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [CatHash] exception: {fullSvnPath}, elapsed={catStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}");
                 return false;
             }
         }
 
-        // 安全尝试：export 到临时文件再算 hash（永不抛异常，负责清理临时文件）
+        // 安全な試行：exportで一時ファイルに保存してhash計算、例外は投げず、一時ファイルの削除も担当
         private bool SafeTryExportHash(string fullSvnPath, string fileName, out string hash)
         {
             hash = "";
             var exportStopwatch = Stopwatch.StartNew();
-            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] start: {fullSvnPath}, file={fileName}");
+            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] start: {fullSvnPath}, file={fileName}");
             string tempFile = "";
             try
             {
-                tempFile = DownloadFileFromSVN(fullSvnPath, fileName); // 同步下载（内部有超时/文件cat兜底）
+                tempFile = DownloadFileFromSVN(fullSvnPath, fileName); // 同期ダウンロード、内部にタイムアウト/ファイルcat予備機能あり
                 if (string.IsNullOrEmpty(tempFile) || !File.Exists(tempFile))
                 {
-                    SafeLog("ErrorLog.txt", $"[export] 未得到文件: {fullSvnPath}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[export] ファイルを得られませんでした: {fullSvnPath}\n");
                     exportStopwatch.Stop();
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(no_file): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
-                    return false; // ★ 硬短路：不要再往下走
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(no_file): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
+                    return false; // ★強制ショートカット、以降の処理は不要
                 }
 
-                // 尺寸稳定 + 非零检查（避免半写/空文件）
+                // サイズ安定化 + 非ゼロチェック、半端な空ファイルを避ける
                 long a = new FileInfo(tempFile).Length;
                 System.Threading.Thread.Sleep(120);
                 long b = new FileInfo(tempFile).Length;
@@ -2948,13 +2840,13 @@ namespace uhr.info.detector
                 }
                 if (b == 0)
                 {
-                    SafeLog("ErrorLog.txt", $"[export] 文件为0字节(跳过): {tempFile}\n");
+                    LogHelper.SafeLog("ErrorLog.txt", $"[export] 斁E��为0字节(跳迁E: {tempFile}\n");
                     exportStopwatch.Stop();
-                    SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(empty_file): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(empty_file): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
                     return false;
                 }
 
-                // 计算 HASH：用共享读取 + 重试，避免被杀软/索引器短暂占用
+                // HASH計算：共有読み取り + リトライを使用、アンチウイルス/インデクサの一時的な占有を避ける
                 for (int i = 0; i < 3; i++)
                 {
                     try
@@ -2965,7 +2857,7 @@ namespace uhr.info.detector
                             var hashBytes = md5.ComputeHash(fs);
                             hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
                             exportStopwatch.Stop();
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] success: {fullSvnPath}, file={fileName}, size={fs.Length}, hash={hash}, elapsed={exportStopwatch.ElapsedMilliseconds}ms\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] success: {fullSvnPath}, file={fileName}, size={fs.Length}, hash={hash}, elapsed={exportStopwatch.ElapsedMilliseconds}ms\n");
                             return true;
                         }
                     }
@@ -2973,31 +2865,31 @@ namespace uhr.info.detector
                     {
                         if (i == 2)
                         {
-                            SafeLog("ErrorLog.txt", $"[export] 读取文件计算哈希失败: {tempFile}\n{ioex}\n");
+                            LogHelper.SafeLog("ErrorLog.txt", $"[export] 读取文件计算哈希失败: {tempFile}\n{ioex}\n");
                             exportStopwatch.Stop();
-                            SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(read): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ioex.Message}\n");
+                            LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(read): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ioex.Message}\n");
                             return false;
                         }
                         System.Threading.Thread.Sleep(150);
                     }
                     catch (Exception ex)
                     {
-                        SafeLog("ErrorLog.txt", $"[export] 计算哈希时发生异常: {tempFile}\n{ex}\n");
+                        LogHelper.SafeLog("ErrorLog.txt", $"[export] 计算哈希时发生异常: {tempFile}\n{ex}\n");
                         exportStopwatch.Stop();
-                        SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] exception(hash_calc): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}\n");
+                        LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] exception(hash_calc): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}\n");
                         return false;
                     }
                 }
 
                 exportStopwatch.Stop();
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(unexpected): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
-                return false; // 理论到不了
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] fail(unexpected): {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms");
+                return false; // 想定外の状況
             }
             catch (Exception ex)
             {
-                SafeLog("ErrorLog.txt", $"[export] 例外: {fullSvnPath}\n{ex}\n");
+                LogHelper.SafeLog("ErrorLog.txt", $"[export] 例外: {fullSvnPath}\n{ex}\n");
                 exportStopwatch.Stop();
-                SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] exception: {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}");
+                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss.fff}] [ExportHash] exception: {fullSvnPath}, elapsed={exportStopwatch.ElapsedMilliseconds}ms, detail={ex.Message}");
                 return false;
             }
             finally
@@ -3010,27 +2902,140 @@ namespace uhr.info.detector
                         var dir = Path.GetDirectoryName(tempFile);
                         if (!string.IsNullOrEmpty(dir))
                         {
-                            // 只在目录已经空了的情况下删除，避免误删其他临时文件
+                            // 只在目录已经空亁E��惁E�E下删除�E�避免误删其他临时斁E��
                             if (Directory.Exists(dir) && Directory.GetFiles(dir).Length == 0 && Directory.GetDirectories(dir).Length == 0)
                                 Directory.Delete(dir, true);
                         }
                     }
                 }
-                catch { /* 清理失败忽略 */ }
+                catch { /* 削除失敗は無視 */ }
             }
         }
 
-        // 小工具：截断长 stderr
+        // 小ツール：長いstderrを切り詰める
         private static string Trim400(string s) => string.IsNullOrEmpty(s) ? "" : (s.Length > 400 ? s.Substring(0, 400) + "..." : s);
 
 
-        // 任何日志都走它：就算路径/权限/占用有问题，绝不把主流程带崩
+        // 安全なログ記録：パス/権限/占有に問題があっても、メインフローをクラッシュさせない
         private static void SafeLog(string file, string text)
         {
             try { System.IO.File.AppendAllText(file, text); }
-            catch { /* 日志失败不可影响主流程 */ }
+            catch { /* ログ失敗はメインフローに影響させない */ }
         }
 
 
+
+        /// <summary>
+        /// SVN最終更新情報を非同期で取得
+        /// svn log --xml --limit 1 を使用して最新のコミット情報（日時、著者、メッセージ）を取得
+        /// </summary>
+
+        private async Task GatherSvnLastUpdatedInfoAsync()
+        {
+            tslStatus.Text = "SVN最終更新情報を取得中...";
+            Application.UseWaitCursor = true;
+            this.Cursor = Cursors.WaitCursor;
+
+            try
+            {
+                string orgCode = txtOrgCode.Text.Trim();
+                string orgName = txtOrgName.Text.Trim();
+
+                if (string.IsNullOrEmpty(orgCode))
+                {
+                    txtLastUpdatedInfo.Text = "(機関が未選択)";
+                    return;
+                }
+
+                string orgFolder;
+                try
+                {
+                    // FindOrgSvnFolder は例外を投げる可能性がある
+                    orgFolder = FindOrgSvnFolder(orgCode);
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] FindOrgSvnFolder 失敗: {ex.Message}\n");
+                    txtLastUpdatedInfo.Text = "(SVNフォルダ検索失敗)";
+                    return;
+                }
+
+                string baseOrgUrl = $"{AppConfig.SVN_CUSTOMIZED_PATH}{orgFolder}";
+                string svnExe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
+
+                // svn log --xml を使用して最新のコミット情報を取得（--limit 1 で最新のみ）
+                var res = await Task.Run(() => RunSvn(svnExe, $"log --xml --limit 1 \"{baseOrgUrl}\"", AppConfig.SVN_COMMAND_TIMEOUT_MS * 5, Encoding.UTF8));
+
+                if (res == null || res.TimedOut || res.ExitCode != 0 || string.IsNullOrWhiteSpace(res.Stdout))
+                {
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] GatherSvnLastUpdatedInfoAsync: svn log 取得失敗 Exit={res?.ExitCode} TimedOut={res?.TimedOut}\n");
+                    txtLastUpdatedInfo.Text = "(SVN情報取得失敗)";
+                    return;
+                }
+
+                try
+                {
+                    var xdoc = System.Xml.Linq.XDocument.Parse(res.Stdout);
+
+                    // logentry 要素を収集（svn log --xml の場合）
+                    var logEntries = xdoc.Descendants("logentry")
+                                      .Select(entry => new
+                                      {
+                                          Revision = (string)entry.Attribute("revision") ?? "",
+                                          Author = (string)entry.Element("author") ?? "",
+                                          DateStr = (string)entry.Element("date") ?? "",
+                                          Message = (string)entry.Element("msg") ?? ""
+                                      })
+                                      .Where(x => !string.IsNullOrEmpty(x.DateStr))
+                                      .ToList();
+
+                    if (logEntries.Count == 0)
+                    {
+                        txtLastUpdatedInfo.Text = "(更新情報なし)";
+                        return;
+                    }
+
+                    // --limit 1 を指定しているので、最初（最新）の1件のみ取得される
+                    var latest = logEntries.First();
+                    
+                    if (DateTimeOffset.TryParse(latest.DateStr, out var latestDt))
+                    {
+                        // ローカル時間に変換して表示
+                        var local = latestDt.ToLocalTime();
+                        string msg = string.IsNullOrWhiteSpace(latest.Message) ? "(メッセージなし)" : latest.Message;
+                        
+                        // メッセージが長すぎる場合は切り詰める
+                        if (msg.Length > 50)
+                            msg = msg.Substring(0, 47) + "...";
+                        
+                        txtLastUpdatedInfo.Text = $"{local:yyyy/MM/dd HH:mm:ss} by {latest.Author}: {msg}";
+                    }
+                    else
+                    {
+                        // 日付解析失敗時は生の文字列を使用
+                        string msg = string.IsNullOrWhiteSpace(latest.Message) ? "" : $": {latest.Message}";
+                        if (msg.Length > 50)
+                            msg = msg.Substring(0, 47) + "...";
+                        txtLastUpdatedInfo.Text = $"{latest.DateStr} by {latest.Author}{msg}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] GatherSvnLastUpdatedInfoAsync XML解析失敗: {ex.Message}\n{ex.StackTrace}\n");
+                    txtLastUpdatedInfo.Text = "(更新情報解析失敗)";
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] GatherSvnLastUpdatedInfoAsync 例外: {ex.Message}\n{ex.StackTrace}\n");
+                txtLastUpdatedInfo.Text = $"(取得失敗: {ex.Message})";
+            }
+            finally
+            {
+                Application.UseWaitCursor = false;
+                this.Cursor = Cursors.Default;
+                tslStatus.Text = "";
+            }
+        }
     }
 }
