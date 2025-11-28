@@ -242,7 +242,7 @@ namespace uhr.info.detector
             }
         }
 
-        private void frmMain_Load(object sender, EventArgs e)
+        private async void frmMain_Load(object sender, EventArgs e)
         {
             // プロジェクトディレクトリ下の svn.exe が存在するかチェック
             string svnPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
@@ -288,7 +288,18 @@ namespace uhr.info.detector
             lstOrgs.Items.AddRange(orgList.ToArray());
 
             // 5. ターゲットバージョンリストの初期化
-            InitTargetVersionList();
+            // データベースから共通のMODULE_INFO表から最高バージョンを読み込む
+            try
+            {
+                await InitTargetVersionListFromDatabase();
+                Debug.WriteLine($"[Init] バージョンリスト初期化完了");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"バージョンリスト初期化中にエラーが発生しました:\n\n{ex.Message}\n\nスタックトレース:\n{ex.StackTrace}",
+                    "初期化エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                InitEmptyTargetVersionList();
+            }
 
             // 6. コントロールのロック等を保持（元コード続行）
             txtOrgCode.ReadOnly = true; txtOrgCode.BackColor = Color.White;
@@ -409,6 +420,151 @@ namespace uhr.info.detector
                 cboYearAdjustTargetVersion.Items.Clear();
                 cboYearAdjustTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
             }
+        }
+
+        /// <summary>
+        /// データベースからターゲットバージョンリストを初期化（新しい実装）
+        /// MODULE_INFO表のFUNCTIONVERフィールドから最大バージョンを取得
+        /// </summary>
+        private async Task InitTargetVersionListFromDatabase()
+        {
+            Debug.WriteLine($"========== InitTargetVersionListFromDatabase 開始 ==========");
+
+            // 1. cboFWTargetVersion を固定値に設定：4.18.4、変更不可
+            cboFWTargetVersion.Items.Clear();
+            cboFWTargetVersion.Items.Add(AppConfig.FIXED_FW_TARGET_VERSION);
+            cboFWTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+            cboFWTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+
+            // 2. データベースから共通機能（Core）バージョンを取得
+            Debug.WriteLine($"[InitDB] Core バージョン取得開始");
+            try
+            {
+                string coreVersion = await GetMaxVersionFromDatabase("Core_V");
+                Debug.WriteLine($"[InitDB] Core バージョン取得結果: '{coreVersion}'");
+                cboCoreTargetVersion.Items.Clear();
+                if (!string.IsNullOrEmpty(coreVersion))
+                {
+                    cboCoreTargetVersion.Items.Add(coreVersion);
+                    cboCoreTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+                    Debug.WriteLine($"[InitDB] Core バージョンを設定しました");
+                }
+                else
+                {
+                    Debug.WriteLine($"[InitDB] Core バージョンが空でした");
+                }
+                cboCoreTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InitDB] Core バージョン取得エラー: {ex.Message}");
+                Debug.WriteLine($"[InitDB] スタックトレース: {ex.StackTrace}");
+                cboCoreTargetVersion.Items.Clear();
+                cboCoreTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+
+            // 3. データベースから給与明細（Salary）バージョンを取得
+            try
+            {
+                Debug.WriteLine($"[InitDB] Salary バージョン取得開始");
+                string salaryVersion = await GetMaxVersionFromDatabase("Salary_V");
+                Debug.WriteLine($"[InitDB] Salary バージョン取得結果: '{salaryVersion}'");
+                cboSalaryTargetVersion.Items.Clear();
+                if (!string.IsNullOrEmpty(salaryVersion))
+                {
+                    cboSalaryTargetVersion.Items.Add(salaryVersion);
+                    cboSalaryTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+                    Debug.WriteLine($"[InitDB] Salary ComboBoxに設定: {salaryVersion}");
+                }
+                else
+                {
+                    Debug.WriteLine($"[InitDB] Salary バージョンが空のため、ComboBoxに何も追加しません");
+                }
+                cboSalaryTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InitDB] Salary バージョン取得エラー: {ex.Message}");
+                Debug.WriteLine($"[InitDB] スタックトレース: {ex.StackTrace}");
+                cboSalaryTargetVersion.Items.Clear();
+                cboSalaryTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+
+            // 4. データベースから年末調整（Nencho）バージョンを取得
+            try
+            {
+                Debug.WriteLine($"[InitDB] Nencho バージョン取得開始");
+                string nenchoVersion = await GetMaxVersionFromDatabase("Nencho_V");
+                Debug.WriteLine($"[InitDB] Nencho バージョン取得結果: '{nenchoVersion}'");
+                cboYearAdjustTargetVersion.Items.Clear();
+                if (!string.IsNullOrEmpty(nenchoVersion))
+                {
+                    cboYearAdjustTargetVersion.Items.Add(nenchoVersion);
+                    cboYearAdjustTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+                    Debug.WriteLine($"[InitDB] Nencho ComboBoxに設定: {nenchoVersion}");
+                }
+                else
+                {
+                    Debug.WriteLine($"[InitDB] Nencho バージョンが空のため、ComboBoxに何も追加しません");
+                }
+                cboYearAdjustTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InitDB] Nencho バージョン取得エラー: {ex.Message}");
+                Debug.WriteLine($"[InitDB] スタックトレース: {ex.StackTrace}");
+                cboYearAdjustTargetVersion.Items.Clear();
+                cboYearAdjustTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+
+            // 5. 諸手当（Shoteate）バージョンを取得
+            try
+            {
+                Debug.WriteLine($"[InitDB] Shoteate バージョン取得開始");
+                string shoteateVersion = await GetMaxVersionFromDatabase("Shoteate_V");
+                Debug.WriteLine($"[InitDB] Shoteate バージョン取得結果: '{shoteateVersion}'");
+                cboShoteateTargetVersion.Items.Clear();
+                if (!string.IsNullOrEmpty(shoteateVersion))
+                {
+                    cboShoteateTargetVersion.Items.Add(shoteateVersion);
+                    cboShoteateTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+                    Debug.WriteLine($"[InitDB] Shoteate ComboBoxに設定: {shoteateVersion}");
+                }
+                else
+                {
+                    Debug.WriteLine($"[InitDB] Shoteate バージョンが空のため、ComboBoxに何も追加しません");
+                }
+                cboShoteateTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InitDB] Shoteate バージョン取得エラー: {ex.Message}");
+                Debug.WriteLine($"[InitDB] スタックトレース: {ex.StackTrace}");
+                cboShoteateTargetVersion.Items.Clear();
+                cboShoteateTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            }
+        }
+
+        /// <summary>
+        /// ターゲットバージョンリストを空で初期化
+        /// </summary>
+        private void InitEmptyTargetVersionList()
+        {
+            // フレームワークバージョンは固定値
+            cboFWTargetVersion.Items.Clear();
+            cboFWTargetVersion.Items.Add(AppConfig.FIXED_FW_TARGET_VERSION);
+            cboFWTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
+            cboFWTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+
+            // 他のComboBoxは空のまま
+            cboCoreTargetVersion.Items.Clear();
+            cboCoreTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboSalaryTargetVersion.Items.Clear();
+            cboSalaryTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboYearAdjustTargetVersion.Items.Clear();
+            cboYearAdjustTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboShoteateTargetVersion.Items.Clear();
+            cboShoteateTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
         }
 
         // SVN ディレクトリ下のサブディレクトリリストを取得
@@ -914,6 +1070,125 @@ namespace uhr.info.detector
             }
         }
 
+        /// <summary>
+        /// データベースからFUNCTIONVERの一覧を取得し、指定されたプレフィックスの最大バージョンを返す
+        /// 目標バージョン用：MODULE_INFOテーブル（組織コードなし）から読み込む
+        /// </summary>
+        /// <param name="prefix">バージョンのプレフィックス（例: "Core_V", "Salary_V", "Nencho_V", "Shoteate_V"）</param>
+        /// <returns>最大のバージョン番号、エラーの場合は空文字列</returns>
+        private async Task<string> GetMaxVersionFromDatabase(string prefix)
+        {
+            Debug.WriteLine($"---------- GetMaxVersionFromDatabase 開始 ----------");
+            Debug.WriteLine($"[GetMaxVer] prefix='{prefix}'");
+
+            if (string.IsNullOrEmpty(prefix))
+            {
+                Debug.WriteLine($"[GetMaxVer] パラメータが空のため終了");
+                return string.Empty;
+            }
+
+            string tableName = "MODULE_INFO";  // 目標バージョンは組織に依存しない共通テーブル
+            string connStr = AppConfig.ORACLE_CONNECTION_STRING;
+            string sql = $"SELECT DISTINCT FUNCTIONVER FROM {tableName} ORDER BY FUNCTIONVER";
+
+            Debug.WriteLine($"[GetMaxVer] テーブル名: {tableName}");
+            Debug.WriteLine($"[GetMaxVer] SQL: {sql}");
+
+            try
+            {
+                var functionVersions = new List<string>();
+
+                Debug.WriteLine($"[GetMaxVer] データベース接続開始");
+                using (var conn = new OracleConnection(connStr))
+                {
+                    await conn.OpenAsync();
+                    Debug.WriteLine($"[GetMaxVer] データベース接続成功");
+
+                    using (var cmd = new OracleCommand(sql, conn))
+                    {
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                string functionVer = reader["FUNCTIONVER"]?.ToString() ?? "";
+                                if (!string.IsNullOrEmpty(functionVer))
+                                {
+                                    functionVersions.Add(functionVer);
+                                    Debug.WriteLine($"[DB] FUNCTIONVER: {functionVer}");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Debug.WriteLine($"[DB] {prefix}用のFUNCTIONVER総数: {functionVersions.Count}");
+
+                // VersionCompareHelper を使用して最大バージョンを取得
+                string maxVersion = VersionCompareHelper.GetMaxVersionByPrefix(functionVersions, prefix);
+                Debug.WriteLine($"[DB] {prefix}の最大バージョン: {maxVersion}");
+                return maxVersion;
+            }
+            catch (OracleException ex)
+            {
+                Debug.WriteLine($"[GetMaxVer] Oracle例外発生: {ex.Message}");
+
+                // テーブルが存在しない場合、大文字のテーブル名で再試行
+                if (ex.Message.Contains(AppConfig.ORACLE_ERROR_TABLE_NOT_EXISTS) ||
+                    ex.Message.Contains(AppConfig.ORACLE_ERROR_OBJECT_NOT_EXISTS))
+                {
+                    Debug.WriteLine($"[GetMaxVer] テーブルが見つかりません。大文字で再試行します");
+                    tableName = tableName.ToUpper();
+                    sql = $"SELECT DISTINCT FUNCTIONVER FROM {tableName} ORDER BY FUNCTIONVER";
+                    Debug.WriteLine($"[GetMaxVer] 新しいSQL: {sql}");
+
+                    try
+                    {
+                        var functionVersions = new List<string>();
+
+                        using (var conn = new OracleConnection(connStr))
+                        {
+                            await conn.OpenAsync();
+                            Debug.WriteLine($"[GetMaxVer] 再試行: データベース接続成功");
+                            using (var cmd = new OracleCommand(sql, conn))
+                            {
+                                using (var reader = await cmd.ExecuteReaderAsync())
+                                {
+                                    while (await reader.ReadAsync())
+                                    {
+                                        string functionVer = reader["FUNCTIONVER"]?.ToString() ?? "";
+                                        if (!string.IsNullOrEmpty(functionVer))
+                                        {
+                                            functionVersions.Add(functionVer);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Debug.WriteLine($"[GetMaxVer] 再試行で取得したバージョン数: {functionVersions.Count}");
+                        string maxVer = VersionCompareHelper.GetMaxVersionByPrefix(functionVersions, prefix);
+                        Debug.WriteLine($"[GetMaxVer] 再試行成功。{prefix}の最大バージョン: {maxVer}");
+                        return maxVer;
+                    }
+                    catch (Exception retryEx)
+                    {
+                        Debug.WriteLine($"[GetMaxVer] 再試行も失敗 ({prefix}): {retryEx.Message}");
+                        return string.Empty;
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"GetMaxVersionFromDatabase エラー ({prefix}): {ex.Message}");
+                    return string.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"GetMaxVersionFromDatabase 予期しないエラー ({prefix}): {ex.Message}");
+                return string.Empty;
+            }
+        }
+
         // MD5 HASH値を計算（改良版、より多くの保護機能を追加）
         private string CalculateFileHash(string filePath)
         {
@@ -1202,42 +1477,200 @@ namespace uhr.info.detector
             string baseOrgUrl = $"{AppConfig.SVN_CUSTOMIZED_PATH}{orgFolder}";
             System.Diagnostics.Debug.WriteLine($"基機関URL: '{baseOrgUrl}'");
 
-            // 機構フォルダ以下の構造を確認
+            // 機構フォルダ以下の構造を確認し、有効なカスタマイズフォルダを自動検出
             string svnPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConfig.SVN_EXE_RELATIVE_PATH);
-            var subdirs = GetSvnSubDirectories(baseOrgUrl, svnPath);
-            System.Diagnostics.Debug.WriteLine($"機構フォルダのサブディレクトリ: {string.Join(", ", subdirs)}");
+            var validFolders = DetectValidCustomizationFolders(baseOrgUrl, svnPath);
+            System.Diagnostics.Debug.WriteLine($"検出された有効なフォルダ: {string.Join(", ", validFolders)}");
 
-            // uhrとROOTの両方をチェックして優先順位を決める
-            string uhrPath = "";
-            string rootPath = "";
-
-            foreach (var subdir in subdirs)
+            if (validFolders.Count == 0)
             {
-                if (subdir.Equals("uhr", StringComparison.OrdinalIgnoreCase))
-                {
-                    uhrPath = $"{baseOrgUrl}/uhr";
-                }
-                else if (subdir.Equals("ROOT", StringComparison.OrdinalIgnoreCase))
-                {
-                    rootPath = $"{baseOrgUrl}/ROOT";
-                }
+                System.Diagnostics.Debug.WriteLine($"有効なフォルダが見つからない、基本ディレクトリを使用: {baseOrgUrl}");
+                return baseOrgUrl;
             }
-
-            // 優先順位: uhr > ROOT > 基本ディレクトリ
-            if (!string.IsNullOrEmpty(uhrPath))
+            else if (validFolders.Count == 1)
             {
-                System.Diagnostics.Debug.WriteLine($"uhrサブディレクトリを使用: {uhrPath}");
-                return uhrPath;
-            }
-            else if (!string.IsNullOrEmpty(rootPath))
-            {
-                System.Diagnostics.Debug.WriteLine($"ROOTサブディレクトリを使用: {rootPath}");
-                return rootPath;
+                string selectedFolder = $"{baseOrgUrl}/{validFolders[0]}";
+                System.Diagnostics.Debug.WriteLine($"自動選択: {selectedFolder}");
+                return selectedFolder;
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"サブディレクトリが見つからない、基本ディレクトリを使用: {baseOrgUrl}");
-                return baseOrgUrl;
+                // 複数見つかった場合、ユーザーに選択させる
+                string selectedFolder = ShowFolderSelectionDialog(validFolders);
+                if (!string.IsNullOrEmpty(selectedFolder))
+                {
+                    string fullPath = $"{baseOrgUrl}/{selectedFolder}";
+                    System.Diagnostics.Debug.WriteLine($"ユーザー選択: {fullPath}");
+                    return fullPath;
+                }
+                else
+                {
+                    // キャンセルされた場合は最初のフォルダを使用
+                    string fallbackPath = $"{baseOrgUrl}/{validFolders[0]}";
+                    System.Diagnostics.Debug.WriteLine($"キャンセル、最初のフォルダを使用: {fallbackPath}");
+                    return fallbackPath;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 有効なカスタマイズフォルダを自動検出する
+        /// 条件: uhr, WEB-INF, jsp サブディレクトリと index.html ファイルが存在すること
+        /// 除外: backup フォルダは検出対象外
+        /// </summary>
+        private List<string> DetectValidCustomizationFolders(string baseOrgUrl, string svnExePath)
+        {
+            var validFolders = new List<string>();
+            var subdirs = GetSvnSubDirectories(baseOrgUrl, svnExePath);
+
+            foreach (var subdir in subdirs)
+            {
+                // backup フォルダは除外
+                if (subdir.Equals("backup", StringComparison.OrdinalIgnoreCase))
+                {
+                    System.Diagnostics.Debug.WriteLine($"backupフォルダをスキップ: {subdir}");
+                    continue;
+                }
+
+                if (IsValidCustomizationFolder(baseOrgUrl, subdir, svnExePath))
+                {
+                    validFolders.Add(subdir);
+                    System.Diagnostics.Debug.WriteLine($"有効なフォルダを検出: {subdir}");
+                }
+            }
+
+            return validFolders;
+        }
+
+        /// <summary>
+        /// フォルダが有効なカスタマイズフォルダかどうかを判定
+        /// </summary>
+        private bool IsValidCustomizationFolder(string baseOrgUrl, string folderName, string svnExePath)
+        {
+            try
+            {
+                string folderUrl = $"{baseOrgUrl}/{folderName}";
+                var res = RunSvn(svnExePath, $"list --xml \"{folderUrl}\"", AppConfig.SVN_COMMAND_TIMEOUT_MS, Encoding.UTF8);
+
+                if (res.TimedOut || res.ExitCode != 0)
+                {
+                    return false;
+                }
+
+                var xdoc = System.Xml.Linq.XDocument.Parse(res.Stdout);
+                var entries = xdoc.Descendants("entry").ToList();
+
+                var folders = entries
+                    .Where(e => (string)e.Attribute("kind") == "dir")
+                    .Select(e => (string)e.Element("name"))
+                    .ToList();
+
+                var files = entries
+                    .Where(e => (string)e.Attribute("kind") == "file")
+                    .Select(e => (string)e.Element("name"))
+                    .ToList();
+
+                // 必須条件: uhr, WEB-INF, jsp フォルダと index.html ファイル
+                bool hasUhr = folders.Any(f => f.Equals("uhr", StringComparison.OrdinalIgnoreCase));
+                bool hasWebInf = folders.Any(f => f.Equals("WEB-INF", StringComparison.OrdinalIgnoreCase));
+                bool hasJsp = folders.Any(f => f.Equals("jsp", StringComparison.OrdinalIgnoreCase));
+                bool hasIndexHtml = files.Any(f => f.Equals("index.html", StringComparison.OrdinalIgnoreCase));
+
+                bool isValid = hasUhr && hasWebInf && hasJsp && hasIndexHtml;
+
+                if (!isValid)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"フォルダ '{folderName}' は無効: uhr={hasUhr}, WEB-INF={hasWebInf}, jsp={hasJsp}, index.html={hasIndexHtml}");
+                }
+
+                return isValid;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"フォルダ '{folderName}' のチェック中にエラー: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// ユーザーに複数のフォルダから選択させるダイアログを表示
+        /// </summary>
+        private string ShowFolderSelectionDialog(List<string> folders)
+        {
+            using (var form = new Form())
+            {
+                form.Text = "カスタマイズフォルダの選択";
+                form.Width = 400;
+                form.Height = 300;
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                form.MaximizeBox = false;
+                form.MinimizeBox = false;
+
+                var label = new Label
+                {
+                    Text = "複数の有効なフォルダが見つかりました。\n使用するフォルダを選択してください:",
+                    Dock = DockStyle.Top,
+                    Height = 50,
+                    Padding = new Padding(10),
+                    AutoSize = false
+                };
+
+                var listBox = new ListBox
+                {
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(10)
+                };
+
+                foreach (var folder in folders)
+                {
+                    listBox.Items.Add(folder);
+                }
+
+                if (listBox.Items.Count > 0)
+                {
+                    listBox.SelectedIndex = 0;
+                }
+
+                var buttonPanel = new Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 50
+                };
+
+                var okButton = new Button
+                {
+                    Text = "OK",
+                    DialogResult = DialogResult.OK,
+                    Width = 80,
+                    Location = new System.Drawing.Point(220, 10)
+                };
+
+                var cancelButton = new Button
+                {
+                    Text = "キャンセル",
+                    DialogResult = DialogResult.Cancel,
+                    Width = 80,
+                    Location = new System.Drawing.Point(310, 10)
+                };
+
+                buttonPanel.Controls.Add(okButton);
+                buttonPanel.Controls.Add(cancelButton);
+
+                form.Controls.Add(listBox);
+                form.Controls.Add(label);
+                form.Controls.Add(buttonPanel);
+
+                form.AcceptButton = okButton;
+                form.CancelButton = cancelButton;
+
+                if (form.ShowDialog() == DialogResult.OK && listBox.SelectedItem != null)
+                {
+                    return listBox.SelectedItem.ToString();
+                }
+
+                return null;
             }
         }
 
