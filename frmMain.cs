@@ -1156,7 +1156,8 @@ namespace uhr.info.detector
                     .Select(v => new { FullVersion = v, VersionNumber = VersionCompareHelper.ExtractVersionFromTail(v) })
                     .Where(vp => !string.IsNullOrEmpty(vp.VersionNumber))
                     .OrderByDescending(vp => vp.VersionNumber, new VersionComparer())
-                    .Select(vp => vp.FullVersion)
+                    .Select(vp => vp.VersionNumber)  // バージョン番号部分のみを返す
+                    .Distinct()  // 重複を除去
                     .ToList();
 
                 Debug.WriteLine($"[DB] {prefix}のバージョンリスト（降順）: {string.Join(", ", versionPairs)}");
@@ -1208,7 +1209,8 @@ namespace uhr.info.detector
                             .Select(v => new { FullVersion = v, VersionNumber = VersionCompareHelper.ExtractVersionFromTail(v) })
                             .Where(vp => !string.IsNullOrEmpty(vp.VersionNumber))
                             .OrderByDescending(vp => vp.VersionNumber, new VersionComparer())
-                            .Select(vp => vp.FullVersion)
+                            .Select(vp => vp.VersionNumber)  // バージョン番号部分のみを返す
+                            .Distinct()  // 重複を除去
                             .ToList();
                         Debug.WriteLine($"[GetAllVer] 再試行成功。{prefix}のバージョン数: {versionPairs.Count}");
                         return versionPairs;
