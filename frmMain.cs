@@ -788,9 +788,11 @@ namespace uhr.info.detector
             }
             
             // フィルタテキストボックスにフォーカスがない場合は更新しない（他のコントロール操作による誤動作を防ぐ）
+            // ただし、lastOrgFilterTextは同期しておく（不一致を防ぐため）
             if (!txtOrgFilter.Focused)
             {
-                // フォーカスがない場合は、lastOrgFilterTextを更新しない（次回フォーカスが戻った時に正しく動作するため）
+                // フォーカスがない場合は、lastOrgFilterTextを同期するが、リストは更新しない
+                lastOrgFilterText = filterText;
                 return;
             }
             
@@ -907,6 +909,17 @@ namespace uhr.info.detector
 
                 string orgCode = item.Substring(0, idx);
                 string orgName = item.Substring(idx + 1);
+
+                // 機関切り替え時：txtOrgFilterのlastOrgFilterTextを同期（不要な刷新を防ぐ）
+                isUpdatingOrgList = true;
+                try
+                {
+                    lastOrgFilterText = txtOrgFilter.Text.Trim();
+                }
+                finally
+                {
+                    isUpdatingOrgList = false;
+                }
 
                 // 2. 機関情報を設定
                 txtOrgCode.Text = orgCode;
