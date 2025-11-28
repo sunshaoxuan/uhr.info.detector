@@ -783,13 +783,28 @@ namespace uhr.info.detector
             
             // 最初に目標バージョンComboBoxのいずれかがドロップダウン中かチェック（最優先）
             // マウスでComboBoxをクリックした瞬間にTextChangedが発火する可能性があるため
+            // このチェックを最初に行うことで、ComboBox操作による誤動作を完全に防ぐ
             if (cboFWTargetVersion.DroppedDown ||
                 cboCoreTargetVersion.DroppedDown ||
                 cboSalaryTargetVersion.DroppedDown ||
                 cboYearAdjustTargetVersion.DroppedDown ||
                 cboShoteateTargetVersion.DroppedDown)
             {
-                // ComboBoxがドロップダウン中の場合は完全に無視
+                // ComboBoxがドロップダウン中の場合は完全に無視（テキスト値も更新しない）
+                return;
+            }
+            
+            // 現在のアクティブコントロールを取得（ComboBoxチェックの前に）
+            var activeControl = this.ActiveControl;
+            
+            // 現在のアクティブコントロールが目標バージョンComboBoxのいずれかの場合は無視
+            if (activeControl == cboFWTargetVersion ||
+                activeControl == cboCoreTargetVersion ||
+                activeControl == cboSalaryTargetVersion ||
+                activeControl == cboYearAdjustTargetVersion ||
+                activeControl == cboShoteateTargetVersion)
+            {
+                // アクティブコントロールがComboBoxの場合は完全に無視（テキスト値も更新しない）
                 return;
             }
             
@@ -800,17 +815,7 @@ namespace uhr.info.detector
                 cboYearAdjustTargetVersion.Focused ||
                 cboShoteateTargetVersion.Focused)
             {
-                return;
-            }
-            
-            // 現在のアクティブコントロールが目標バージョンComboBoxのいずれかの場合も無視
-            var activeControl = this.ActiveControl;
-            if (activeControl == cboFWTargetVersion ||
-                activeControl == cboCoreTargetVersion ||
-                activeControl == cboSalaryTargetVersion ||
-                activeControl == cboYearAdjustTargetVersion ||
-                activeControl == cboShoteateTargetVersion)
-            {
+                // ComboBoxがフォーカスを持っている場合は完全に無視（テキスト値も更新しない）
                 return;
             }
             
