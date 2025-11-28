@@ -200,6 +200,7 @@ namespace uhr.info.detector
         // 全機関リストをキャッシュ
         private List<string> orgListCache = new List<string>();
         private bool isUpdatingOrgList = false; // 機関リスト更新中フラグ（不要な刷新を防ぐ）
+        private string lastOrgFilterTextValue = string.Empty; // 前回のテキスト値を保存（実際の変更を検出）
         // フォームメンバーとしてキャンセル用トークンソースを追加
         private CancellationTokenSource orgChangeCts;
         // MODULE_INFO表のデータをキャッシュ
@@ -290,6 +291,8 @@ namespace uhr.info.detector
             {
                 lstOrgs.Items.Clear();
                 lstOrgs.Items.AddRange(orgList.ToArray());
+                // 初期化時にlastOrgFilterTextValueを同期
+                lastOrgFilterTextValue = txtOrgFilter.Text.Trim();
             }
             finally
             {
@@ -778,29 +781,19 @@ namespace uhr.info.detector
                 return;
             }
             
-            // フィルタテキストボックスにフォーカスがない場合は何もしない
-            if (!txtOrgFilter.Focused)
-            {
-                return;
-            }
-            
-            // 現在のアクティブコントロールがフィルタテキストボックスでない場合は何もしない
-            if (this.ActiveControl != txtOrgFilter)
-            {
-                return;
-            }
-            
-            // 目標バージョンComboBoxのいずれかがドロップダウン中の場合は何もしない
+            // 最初に目標バージョンComboBoxのいずれかがドロップダウン中かチェック（最優先）
+            // マウスでComboBoxをクリックした瞬間にTextChangedが発火する可能性があるため
             if (cboFWTargetVersion.DroppedDown ||
                 cboCoreTargetVersion.DroppedDown ||
                 cboSalaryTargetVersion.DroppedDown ||
                 cboYearAdjustTargetVersion.DroppedDown ||
                 cboShoteateTargetVersion.DroppedDown)
             {
+                // ComboBoxがドロップダウン中の場合は完全に無視
                 return;
             }
             
-            // 目標バージョンComboBoxのいずれかがフォーカスを持っている場合は何もしない
+            // 目標バージョンComboBoxのいずれかがフォーカスを持っている場合も無視
             if (cboFWTargetVersion.Focused ||
                 cboCoreTargetVersion.Focused ||
                 cboSalaryTargetVersion.Focused ||
@@ -810,12 +803,48 @@ namespace uhr.info.detector
                 return;
             }
             
+            // 現在のアクティブコントロールが目標バージョンComboBoxのいずれかの場合も無視
+            var activeControl = this.ActiveControl;
+            if (activeControl == cboFWTargetVersion ||
+                activeControl == cboCoreTargetVersion ||
+                activeControl == cboSalaryTargetVersion ||
+                activeControl == cboYearAdjustTargetVersion ||
+                activeControl == cboShoteateTargetVersion)
+            {
+                return;
+            }
+            
             string filterText = txtOrgFilter.Text.Trim();
             
+            // テキストが実際に変更されていない場合は何もしない
+            if (filterText == lastOrgFilterTextValue)
+            {
+                return;
+            }
+            
+            // フィルタテキストボックスにフォーカスがない場合は何もしない
+            if (!txtOrgFilter.Focused)
+            {
+                // フォーカスがない場合は、テキスト値を更新するが、リストは更新しない
+                lastOrgFilterTextValue = filterText;
+                return;
+            }
+            
+            // 現在のアクティブコントロールがフィルタテキストボックスでない場合は何もしない
+            if (activeControl != txtOrgFilter)
+            {
+                // アクティブコントロールが違う場合は、テキスト値を更新するが、リストは更新しない
+                lastOrgFilterTextValue = filterText;
+                return;
+            }
+            
+            // ここまで来た場合のみ、ユーザーが実際にtxtOrgFilterに入力していると判断
             // 更新フラグを設定
             isUpdatingOrgList = true;
             try
             {
+                lastOrgFilterTextValue = filterText;
+                
                 lstOrgs.Items.Clear();
 
                 if (string.IsNullOrEmpty(filterText))
