@@ -779,8 +779,33 @@ namespace uhr.info.detector
             }
             
             // フィルタテキストボックスにフォーカスがない場合は何もしない
-            // ユーザーが実際に入力している場合のみ更新する
-            if (!txtOrgFilter.Focused || this.ActiveControl != txtOrgFilter)
+            if (!txtOrgFilter.Focused)
+            {
+                return;
+            }
+            
+            // 現在のアクティブコントロールがフィルタテキストボックスでない場合は何もしない
+            if (this.ActiveControl != txtOrgFilter)
+            {
+                return;
+            }
+            
+            // 目標バージョンComboBoxのいずれかがドロップダウン中の場合は何もしない
+            if (cboFWTargetVersion.DroppedDown ||
+                cboCoreTargetVersion.DroppedDown ||
+                cboSalaryTargetVersion.DroppedDown ||
+                cboYearAdjustTargetVersion.DroppedDown ||
+                cboShoteateTargetVersion.DroppedDown)
+            {
+                return;
+            }
+            
+            // 目標バージョンComboBoxのいずれかがフォーカスを持っている場合は何もしない
+            if (cboFWTargetVersion.Focused ||
+                cboCoreTargetVersion.Focused ||
+                cboSalaryTargetVersion.Focused ||
+                cboYearAdjustTargetVersion.Focused ||
+                cboShoteateTargetVersion.Focused)
             {
                 return;
             }
