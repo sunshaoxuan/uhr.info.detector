@@ -199,6 +199,7 @@ namespace uhr.info.detector
 
         // 全機関リストをキャッシュ
         private List<string> orgListCache = new List<string>();
+        private string lastOrgFilterText = string.Empty; // 前回のフィルタテキストを保存（不要な刷新を防ぐ）
         // フォームメンバーとしてキャンセル用トークンソースを追加
         private CancellationTokenSource orgChangeCts;
         // MODULE_INFO表のデータをキャッシュ
@@ -436,18 +437,18 @@ namespace uhr.info.detector
             cboFWTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
             cboFWTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
 
-            // 2. データベースから共通機能（Core）バージョンを取得
+            // 2. データベースから共通機能（Core）バージョンリストを取得
             Debug.WriteLine($"[InitDB] Core バージョン取得開始");
             try
             {
-                string coreVersion = await GetMaxVersionFromDatabase("Core_V");
-                Debug.WriteLine($"[InitDB] Core バージョン取得結果: '{coreVersion}'");
+                var coreVersions = await GetAllVersionsFromDatabase("Core_V");
+                Debug.WriteLine($"[InitDB] Core バージョン取得結果: {coreVersions.Count}個");
                 cboCoreTargetVersion.Items.Clear();
-                if (!string.IsNullOrEmpty(coreVersion))
+                if (coreVersions.Count > 0)
                 {
-                    cboCoreTargetVersion.Items.Add(coreVersion);
-                    cboCoreTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
-                    Debug.WriteLine($"[InitDB] Core バージョンを設定しました");
+                    cboCoreTargetVersion.Items.AddRange(coreVersions.ToArray());
+                    cboCoreTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX; // 最大バージョン（最初の要素）を選択
+                    Debug.WriteLine($"[InitDB] Core バージョンリストを設定しました（{coreVersions.Count}個、デフォルト: {coreVersions[0]}）");
                 }
                 else
                 {
@@ -463,18 +464,18 @@ namespace uhr.info.detector
                 cboCoreTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
             }
 
-            // 3. データベースから給与明細（Salary）バージョンを取得
+            // 3. データベースから給与明細（Salary）バージョンリストを取得
             try
             {
                 Debug.WriteLine($"[InitDB] Salary バージョン取得開始");
-                string salaryVersion = await GetMaxVersionFromDatabase("Salary_V");
-                Debug.WriteLine($"[InitDB] Salary バージョン取得結果: '{salaryVersion}'");
+                var salaryVersions = await GetAllVersionsFromDatabase("Salary_V");
+                Debug.WriteLine($"[InitDB] Salary バージョン取得結果: {salaryVersions.Count}個");
                 cboSalaryTargetVersion.Items.Clear();
-                if (!string.IsNullOrEmpty(salaryVersion))
+                if (salaryVersions.Count > 0)
                 {
-                    cboSalaryTargetVersion.Items.Add(salaryVersion);
-                    cboSalaryTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
-                    Debug.WriteLine($"[InitDB] Salary ComboBoxに設定: {salaryVersion}");
+                    cboSalaryTargetVersion.Items.AddRange(salaryVersions.ToArray());
+                    cboSalaryTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX; // 最大バージョン（最初の要素）を選択
+                    Debug.WriteLine($"[InitDB] Salary ComboBoxに設定: {salaryVersions.Count}個（デフォルト: {salaryVersions[0]}）");
                 }
                 else
                 {
@@ -490,18 +491,18 @@ namespace uhr.info.detector
                 cboSalaryTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
             }
 
-            // 4. データベースから年末調整（Nencho）バージョンを取得
+            // 4. データベースから年末調整（Nencho）バージョンリストを取得
             try
             {
                 Debug.WriteLine($"[InitDB] Nencho バージョン取得開始");
-                string nenchoVersion = await GetMaxVersionFromDatabase("Nencho_V");
-                Debug.WriteLine($"[InitDB] Nencho バージョン取得結果: '{nenchoVersion}'");
+                var nenchoVersions = await GetAllVersionsFromDatabase("Nencho_V");
+                Debug.WriteLine($"[InitDB] Nencho バージョン取得結果: {nenchoVersions.Count}個");
                 cboYearAdjustTargetVersion.Items.Clear();
-                if (!string.IsNullOrEmpty(nenchoVersion))
+                if (nenchoVersions.Count > 0)
                 {
-                    cboYearAdjustTargetVersion.Items.Add(nenchoVersion);
-                    cboYearAdjustTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
-                    Debug.WriteLine($"[InitDB] Nencho ComboBoxに設定: {nenchoVersion}");
+                    cboYearAdjustTargetVersion.Items.AddRange(nenchoVersions.ToArray());
+                    cboYearAdjustTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX; // 最大バージョン（最初の要素）を選択
+                    Debug.WriteLine($"[InitDB] Nencho ComboBoxに設定: {nenchoVersions.Count}個（デフォルト: {nenchoVersions[0]}）");
                 }
                 else
                 {
@@ -517,18 +518,18 @@ namespace uhr.info.detector
                 cboYearAdjustTargetVersion.DropDownStyle = ComboBoxStyle.DropDownList;
             }
 
-            // 5. 諸手当（Shoteate）バージョンを取得
+            // 5. 諸手当（Shoteate）バージョンリストを取得
             try
             {
                 Debug.WriteLine($"[InitDB] Shoteate バージョン取得開始");
-                string shoteateVersion = await GetMaxVersionFromDatabase("Shoteate_V");
-                Debug.WriteLine($"[InitDB] Shoteate バージョン取得結果: '{shoteateVersion}'");
+                var shoteateVersions = await GetAllVersionsFromDatabase("Shoteate_V");
+                Debug.WriteLine($"[InitDB] Shoteate バージョン取得結果: {shoteateVersions.Count}個");
                 cboShoteateTargetVersion.Items.Clear();
-                if (!string.IsNullOrEmpty(shoteateVersion))
+                if (shoteateVersions.Count > 0)
                 {
-                    cboShoteateTargetVersion.Items.Add(shoteateVersion);
-                    cboShoteateTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX;
-                    Debug.WriteLine($"[InitDB] Shoteate ComboBoxに設定: {shoteateVersion}");
+                    cboShoteateTargetVersion.Items.AddRange(shoteateVersions.ToArray());
+                    cboShoteateTargetVersion.SelectedIndex = AppConfig.DEFAULT_SELECTED_INDEX; // 最大バージョン（最初の要素）を選択
+                    Debug.WriteLine($"[InitDB] Shoteate ComboBoxに設定: {shoteateVersions.Count}個（デフォルト: {shoteateVersions[0]}）");
                 }
                 else
                 {
@@ -764,6 +765,21 @@ namespace uhr.info.detector
         private void txtOrgFilter_TextChanged(object sender, EventArgs e)
         {
             string filterText = txtOrgFilter.Text.Trim();
+            
+            // テキストが実際に変更されていない場合は何もしない（不要な刷新を防ぐ）
+            if (filterText == lastOrgFilterText)
+            {
+                return;
+            }
+            
+            lastOrgFilterText = filterText;
+            
+            // フィルタテキストボックスにフォーカスがない場合は更新しない（他のコントロール操作による誤動作を防ぐ）
+            if (!txtOrgFilter.Focused)
+            {
+                return;
+            }
+            
             lstOrgs.Items.Clear();
 
             if (string.IsNullOrEmpty(filterText))
@@ -1076,33 +1092,38 @@ namespace uhr.info.detector
         /// </summary>
         /// <param name="prefix">バージョンのプレフィックス（例: "Core_V", "Salary_V", "Nencho_V", "Shoteate_V"）</param>
         /// <returns>最大のバージョン番号、エラーの場合は空文字列</returns>
-        private async Task<string> GetMaxVersionFromDatabase(string prefix)
+        /// <summary>
+        /// データベースから指定されたプレフィックスに一致するすべてのバージョンリストを取得
+        /// </summary>
+        /// <param name="prefix">バージョンプレフィックス（例: "Core_V", "Salary_V"）</param>
+        /// <returns>バージョンリスト（降順ソート済み）</returns>
+        private async Task<List<string>> GetAllVersionsFromDatabase(string prefix)
         {
-            Debug.WriteLine($"---------- GetMaxVersionFromDatabase 開始 ----------");
-            Debug.WriteLine($"[GetMaxVer] prefix='{prefix}'");
+            Debug.WriteLine($"---------- GetAllVersionsFromDatabase 開始 ----------");
+            Debug.WriteLine($"[GetAllVer] prefix='{prefix}'");
 
             if (string.IsNullOrEmpty(prefix))
             {
-                Debug.WriteLine($"[GetMaxVer] パラメータが空のため終了");
-                return string.Empty;
+                Debug.WriteLine($"[GetAllVer] パラメータが空のため終了");
+                return new List<string>();
             }
 
             string tableName = "MODULE_INFO";  // 目標バージョンは組織に依存しない共通テーブル
             string connStr = AppConfig.ORACLE_CONNECTION_STRING;
             string sql = $"SELECT DISTINCT FUNCTIONVER FROM {tableName} ORDER BY FUNCTIONVER";
 
-            Debug.WriteLine($"[GetMaxVer] テーブル名: {tableName}");
-            Debug.WriteLine($"[GetMaxVer] SQL: {sql}");
+            Debug.WriteLine($"[GetAllVer] テーブル名: {tableName}");
+            Debug.WriteLine($"[GetAllVer] SQL: {sql}");
 
             try
             {
                 var functionVersions = new List<string>();
 
-                Debug.WriteLine($"[GetMaxVer] データベース接続開始");
+                Debug.WriteLine($"[GetAllVer] データベース接続開始");
                 using (var conn = new OracleConnection(connStr))
                 {
                     await conn.OpenAsync();
-                    Debug.WriteLine($"[GetMaxVer] データベース接続成功");
+                    Debug.WriteLine($"[GetAllVer] データベース接続成功");
 
                     using (var cmd = new OracleCommand(sql, conn))
                     {
@@ -1121,25 +1142,39 @@ namespace uhr.info.detector
                     }
                 }
 
-                Debug.WriteLine($"[DB] {prefix}用のFUNCTIONVER総数: {functionVersions.Count}");
+                Debug.WriteLine($"[DB] 取得したFUNCTIONVER総数: {functionVersions.Count}");
 
-                // VersionCompareHelper を使用して最大バージョンを取得
-                string maxVersion = VersionCompareHelper.GetMaxVersionByPrefix(functionVersions, prefix);
-                Debug.WriteLine($"[DB] {prefix}の最大バージョン: {maxVersion}");
-                return maxVersion;
+                // プレフィックスに一致するバージョンをフィルタリング
+                var matchedVersions = functionVersions
+                    .Where(v => v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                Debug.WriteLine($"[DB] {prefix}に一致するバージョン数: {matchedVersions.Count}");
+
+                // バージョン番号を抽出してソート用のキーを作成
+                var versionPairs = matchedVersions
+                    .Select(v => new { FullVersion = v, VersionNumber = VersionCompareHelper.ExtractVersionFromTail(v) })
+                    .Where(vp => !string.IsNullOrEmpty(vp.VersionNumber))
+                    .OrderByDescending(vp => vp.VersionNumber, new VersionComparer())
+                    .Select(vp => vp.FullVersion)
+                    .ToList();
+
+                Debug.WriteLine($"[DB] {prefix}のバージョンリスト（降順）: {string.Join(", ", versionPairs)}");
+
+                return versionPairs;
             }
             catch (OracleException ex)
             {
-                Debug.WriteLine($"[GetMaxVer] Oracle例外発生: {ex.Message}");
+                Debug.WriteLine($"[GetAllVer] Oracle例外発生: {ex.Message}");
 
                 // テーブルが存在しない場合、大文字のテーブル名で再試行
                 if (ex.Message.Contains(AppConfig.ORACLE_ERROR_TABLE_NOT_EXISTS) ||
                     ex.Message.Contains(AppConfig.ORACLE_ERROR_OBJECT_NOT_EXISTS))
                 {
-                    Debug.WriteLine($"[GetMaxVer] テーブルが見つかりません。大文字で再試行します");
+                    Debug.WriteLine($"[GetAllVer] テーブルが見つかりません。大文字で再試行します");
                     tableName = tableName.ToUpper();
                     sql = $"SELECT DISTINCT FUNCTIONVER FROM {tableName} ORDER BY FUNCTIONVER";
-                    Debug.WriteLine($"[GetMaxVer] 新しいSQL: {sql}");
+                    Debug.WriteLine($"[GetAllVer] 新しいSQL: {sql}");
 
                     try
                     {
@@ -1148,7 +1183,7 @@ namespace uhr.info.detector
                         using (var conn = new OracleConnection(connStr))
                         {
                             await conn.OpenAsync();
-                            Debug.WriteLine($"[GetMaxVer] 再試行: データベース接続成功");
+                            Debug.WriteLine($"[GetAllVer] 再試行: データベース接続成功");
                             using (var cmd = new OracleCommand(sql, conn))
                             {
                                 using (var reader = await cmd.ExecuteReaderAsync())
@@ -1165,28 +1200,49 @@ namespace uhr.info.detector
                             }
                         }
 
-                        Debug.WriteLine($"[GetMaxVer] 再試行で取得したバージョン数: {functionVersions.Count}");
-                        string maxVer = VersionCompareHelper.GetMaxVersionByPrefix(functionVersions, prefix);
-                        Debug.WriteLine($"[GetMaxVer] 再試行成功。{prefix}の最大バージョン: {maxVer}");
-                        return maxVer;
+                        Debug.WriteLine($"[GetAllVer] 再試行で取得したバージョン数: {functionVersions.Count}");
+                        var matchedVersions = functionVersions
+                            .Where(v => v.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        var versionPairs = matchedVersions
+                            .Select(v => new { FullVersion = v, VersionNumber = VersionCompareHelper.ExtractVersionFromTail(v) })
+                            .Where(vp => !string.IsNullOrEmpty(vp.VersionNumber))
+                            .OrderByDescending(vp => vp.VersionNumber, new VersionComparer())
+                            .Select(vp => vp.FullVersion)
+                            .ToList();
+                        Debug.WriteLine($"[GetAllVer] 再試行成功。{prefix}のバージョン数: {versionPairs.Count}");
+                        return versionPairs;
                     }
                     catch (Exception retryEx)
                     {
-                        Debug.WriteLine($"[GetMaxVer] 再試行も失敗 ({prefix}): {retryEx.Message}");
-                        return string.Empty;
+                        Debug.WriteLine($"[GetAllVer] 再試行も失敗 ({prefix}): {retryEx.Message}");
+                        return new List<string>();
                     }
                 }
                 else
                 {
-                    Debug.WriteLine($"GetMaxVersionFromDatabase エラー ({prefix}): {ex.Message}");
-                    return string.Empty;
+                    Debug.WriteLine($"GetAllVersionsFromDatabase エラー ({prefix}): {ex.Message}");
+                    return new List<string>();
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"GetMaxVersionFromDatabase 予期しないエラー ({prefix}): {ex.Message}");
-                return string.Empty;
+                Debug.WriteLine($"GetAllVersionsFromDatabase 予期しないエラー ({prefix}): {ex.Message}");
+                return new List<string>();
             }
+        }
+
+        /// <summary>
+        /// データベースから指定されたプレフィックスの最大バージョンを取得（後方互換性のため保持）
+        /// </summary>
+        private async Task<string> GetMaxVersionFromDatabase(string prefix)
+        {
+            var allVersions = await GetAllVersionsFromDatabase(prefix);
+            if (allVersions.Count > 0)
+            {
+                return allVersions[0]; // 降順ソート済みなので最初が最大バージョン
+            }
+            return string.Empty;
         }
 
         // MD5 HASH値を計算（改良版、より多くの保護機能を追加）
@@ -3468,6 +3524,17 @@ namespace uhr.info.detector
                 Application.UseWaitCursor = false;
                 this.Cursor = Cursors.Default;
                 tslStatus.Text = "";
+            }
+        }
+
+        /// <summary>
+        /// バージョン文字列の比較を行うIComparer実装
+        /// </summary>
+        private class VersionComparer : IComparer<string>
+        {
+            public int Compare(string x, string y)
+            {
+                return VersionCompareHelper.CompareVersionStringSmartAsc(x, y);
             }
         }
     }
