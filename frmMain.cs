@@ -200,6 +200,7 @@ namespace uhr.info.detector
         // 全機関リストをキャッシュ
         private List<string> orgListCache = new List<string>();
         private string lastOrgFilterText = string.Empty; // 前回のフィルタテキストを保存（不要な刷新を防ぐ）
+        private bool isUpdatingOrgList = false; // 機関リスト更新中フラグ（不要な刷新を防ぐ）
         // フォームメンバーとしてキャンセル用トークンソースを追加
         private CancellationTokenSource orgChangeCts;
         // MODULE_INFO表のデータをキャッシュ
@@ -285,8 +286,16 @@ namespace uhr.info.detector
                 }
             }
             orgListCache = orgList;
-            lstOrgs.Items.Clear();
-            lstOrgs.Items.AddRange(orgList.ToArray());
+            isUpdatingOrgList = true; // 更新フラグを設定
+            try
+            {
+                lstOrgs.Items.Clear();
+                lstOrgs.Items.AddRange(orgList.ToArray());
+            }
+            finally
+            {
+                isUpdatingOrgList = false;
+            }
 
             // 5. ターゲットバージョンリストの初期化
             // データベースから共通のMODULE_INFO表から最高バージョンを読み込む
@@ -764,6 +773,12 @@ namespace uhr.info.detector
 
         private void txtOrgFilter_TextChanged(object sender, EventArgs e)
         {
+            // 既に更新中の場合は何もしない（再帰呼び出しを防ぐ）
+            if (isUpdatingOrgList)
+            {
+                return;
+            }
+            
             string filterText = txtOrgFilter.Text.Trim();
             
             // テキストが実際に変更されていない場合は何もしない（不要な刷新を防ぐ）
@@ -772,33 +787,65 @@ namespace uhr.info.detector
                 return;
             }
             
-            lastOrgFilterText = filterText;
-            
             // フィルタテキストボックスにフォーカスがない場合は更新しない（他のコントロール操作による誤動作を防ぐ）
             if (!txtOrgFilter.Focused)
             {
+                // フォーカスがない場合は、lastOrgFilterTextを更新しない（次回フォーカスが戻った時に正しく動作するため）
                 return;
             }
             
-            lstOrgs.Items.Clear();
-
-            if (string.IsNullOrEmpty(filterText))
+            // 現在のアクティブコントロールがフィルタテキストボックスでない場合も更新しない
+            // また、アクティブコントロールが目標バージョンComboBoxのいずれかでもない場合も更新しない
+            var activeControl = this.ActiveControl;
+            if (activeControl != txtOrgFilter)
             {
-                // フィルタが空の場合、すべてのアイテムを表示
-                lstOrgs.Items.AddRange(orgListCache.ToArray());
+                // 目標バージョンComboBoxのいずれかがアクティブな場合は更新しない
+                if (activeControl == cboFWTargetVersion ||
+                    activeControl == cboCoreTargetVersion ||
+                    activeControl == cboSalaryTargetVersion ||
+                    activeControl == cboYearAdjustTargetVersion ||
+                    activeControl == cboShoteateTargetVersion)
+                {
+                    return;
+                }
+                
+                // その他のコントロールがアクティブな場合も更新しない
+                if (activeControl != null)
+                {
+                    return;
+                }
             }
-            else
+            
+            // 更新フラグを設定
+            isUpdatingOrgList = true;
+            try
             {
-                // フィルタテキストに基づいて項目を絞り込み
-                var filteredItems = orgListCache.Where(item =>
-                    item.IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-                lstOrgs.Items.AddRange(filteredItems.ToArray());
-            }
+                lastOrgFilterText = filterText;
+                
+                lstOrgs.Items.Clear();
 
-            // フィルタ後に項目がある場合、最初の項目を選択
-            if (lstOrgs.Items.Count > 0)
+                if (string.IsNullOrEmpty(filterText))
+                {
+                    // フィルタが空の場合、すべてのアイテムを表示
+                    lstOrgs.Items.AddRange(orgListCache.ToArray());
+                }
+                else
+                {
+                    // フィルタテキストに基づいて項目を絞り込み
+                    var filteredItems = orgListCache.Where(item =>
+                        item.IndexOf(filterText, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                    lstOrgs.Items.AddRange(filteredItems.ToArray());
+                }
+
+                // フィルタ後に項目がある場合、最初の項目を選択
+                if (lstOrgs.Items.Count > 0)
+                {
+                    lstOrgs.SelectedIndex = AppConfig.FIRST_ITEM_INDEX;
+                }
+            }
+            finally
             {
-                lstOrgs.SelectedIndex = AppConfig.FIRST_ITEM_INDEX;
+                isUpdatingOrgList = false;
             }
         }
 
