@@ -781,41 +781,16 @@ namespace uhr.info.detector
                 return;
             }
             
-            // 最初に目標バージョンComboBoxのいずれかがドロップダウン中かチェック（最優先）
-            // マウスでComboBoxをクリックした瞬間にTextChangedが発火する可能性があるため
-            // このチェックを最初に行うことで、ComboBox操作による誤動作を完全に防ぐ
-            if (cboFWTargetVersion.DroppedDown ||
-                cboCoreTargetVersion.DroppedDown ||
-                cboSalaryTargetVersion.DroppedDown ||
-                cboYearAdjustTargetVersion.DroppedDown ||
-                cboShoteateTargetVersion.DroppedDown)
+            // フィルタテキストボックスにフォーカスがない場合は何もしない
+            // ユーザーが実際に入力している場合のみ更新する
+            if (!txtOrgFilter.Focused)
             {
-                // ComboBoxがドロップダウン中の場合は完全に無視（テキスト値も更新しない）
                 return;
             }
             
-            // 現在のアクティブコントロールを取得（ComboBoxチェックの前に）
-            var activeControl = this.ActiveControl;
-            
-            // 現在のアクティブコントロールが目標バージョンComboBoxのいずれかの場合は無視
-            if (activeControl == cboFWTargetVersion ||
-                activeControl == cboCoreTargetVersion ||
-                activeControl == cboSalaryTargetVersion ||
-                activeControl == cboYearAdjustTargetVersion ||
-                activeControl == cboShoteateTargetVersion)
+            // 現在のアクティブコントロールがフィルタテキストボックスでない場合は何もしない
+            if (this.ActiveControl != txtOrgFilter)
             {
-                // アクティブコントロールがComboBoxの場合は完全に無視（テキスト値も更新しない）
-                return;
-            }
-            
-            // 目標バージョンComboBoxのいずれかがフォーカスを持っている場合も無視
-            if (cboFWTargetVersion.Focused ||
-                cboCoreTargetVersion.Focused ||
-                cboSalaryTargetVersion.Focused ||
-                cboYearAdjustTargetVersion.Focused ||
-                cboShoteateTargetVersion.Focused)
-            {
-                // ComboBoxがフォーカスを持っている場合は完全に無視（テキスト値も更新しない）
                 return;
             }
             
@@ -824,22 +799,6 @@ namespace uhr.info.detector
             // テキストが実際に変更されていない場合は何もしない
             if (filterText == lastOrgFilterTextValue)
             {
-                return;
-            }
-            
-            // フィルタテキストボックスにフォーカスがない場合は何もしない
-            if (!txtOrgFilter.Focused)
-            {
-                // フォーカスがない場合は、テキスト値を更新するが、リストは更新しない
-                lastOrgFilterTextValue = filterText;
-                return;
-            }
-            
-            // 現在のアクティブコントロールがフィルタテキストボックスでない場合は何もしない
-            if (activeControl != txtOrgFilter)
-            {
-                // アクティブコントロールが違う場合は、テキスト値を更新するが、リストは更新しない
-                lastOrgFilterTextValue = filterText;
                 return;
             }
             
