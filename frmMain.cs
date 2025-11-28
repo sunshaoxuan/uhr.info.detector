@@ -199,7 +199,6 @@ namespace uhr.info.detector
 
         // 全機関リストをキャッシュ
         private List<string> orgListCache = new List<string>();
-        private string lastOrgFilterText = string.Empty; // 前回のフィルタテキストを保存（不要な刷新を防ぐ）
         private bool isUpdatingOrgList = false; // 機関リスト更新中フラグ（不要な刷新を防ぐ）
         // フォームメンバーとしてキャンセル用トークンソースを追加
         private CancellationTokenSource orgChangeCts;
@@ -779,65 +778,19 @@ namespace uhr.info.detector
                 return;
             }
             
+            // フィルタテキストボックスにフォーカスがない場合は何もしない
+            // ユーザーが実際に入力している場合のみ更新する
+            if (!txtOrgFilter.Focused || this.ActiveControl != txtOrgFilter)
+            {
+                return;
+            }
+            
             string filterText = txtOrgFilter.Text.Trim();
-            
-            // テキストが実際に変更されていない場合は何もしない（不要な刷新を防ぐ）
-            if (filterText == lastOrgFilterText)
-            {
-                return;
-            }
-            
-            // フィルタテキストボックスにフォーカスがない場合は更新しない（他のコントロール操作による誤動作を防ぐ）
-            // ただし、lastOrgFilterTextは同期しておく（不一致を防ぐため）
-            if (!txtOrgFilter.Focused)
-            {
-                // フォーカスがない場合は、lastOrgFilterTextを同期するが、リストは更新しない
-                lastOrgFilterText = filterText;
-                return;
-            }
-            
-            // 目標バージョンComboBoxのいずれかがドロップダウン中、またはフォーカスを持っている場合は更新しない
-            if (cboFWTargetVersion.DroppedDown ||
-                cboCoreTargetVersion.DroppedDown ||
-                cboSalaryTargetVersion.DroppedDown ||
-                cboYearAdjustTargetVersion.DroppedDown ||
-                cboShoteateTargetVersion.DroppedDown ||
-                cboFWTargetVersion.Focused ||
-                cboCoreTargetVersion.Focused ||
-                cboSalaryTargetVersion.Focused ||
-                cboYearAdjustTargetVersion.Focused ||
-                cboShoteateTargetVersion.Focused)
-            {
-                return;
-            }
-            
-            // 現在のアクティブコントロールがフィルタテキストボックスでない場合も更新しない
-            var activeControl = this.ActiveControl;
-            if (activeControl != txtOrgFilter)
-            {
-                // 目標バージョンComboBoxのいずれかがアクティブな場合は更新しない
-                if (activeControl == cboFWTargetVersion ||
-                    activeControl == cboCoreTargetVersion ||
-                    activeControl == cboSalaryTargetVersion ||
-                    activeControl == cboYearAdjustTargetVersion ||
-                    activeControl == cboShoteateTargetVersion)
-                {
-                    return;
-                }
-                
-                // その他のコントロールがアクティブな場合も更新しない
-                if (activeControl != null)
-                {
-                    return;
-                }
-            }
             
             // 更新フラグを設定
             isUpdatingOrgList = true;
             try
             {
-                lastOrgFilterText = filterText;
-                
                 lstOrgs.Items.Clear();
 
                 if (string.IsNullOrEmpty(filterText))
@@ -909,17 +862,6 @@ namespace uhr.info.detector
 
                 string orgCode = item.Substring(0, idx);
                 string orgName = item.Substring(idx + 1);
-
-                // 機関切り替え時：txtOrgFilterのlastOrgFilterTextを同期（不要な刷新を防ぐ）
-                isUpdatingOrgList = true;
-                try
-                {
-                    lastOrgFilterText = txtOrgFilter.Text.Trim();
-                }
-                finally
-                {
-                    isUpdatingOrgList = false;
-                }
 
                 // 2. 機関情報を設定
                 txtOrgCode.Text = orgCode;
