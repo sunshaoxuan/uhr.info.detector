@@ -794,8 +794,22 @@ namespace uhr.info.detector
                 return;
             }
             
+            // 目標バージョンComboBoxのいずれかがドロップダウン中、またはフォーカスを持っている場合は更新しない
+            if (cboFWTargetVersion.DroppedDown ||
+                cboCoreTargetVersion.DroppedDown ||
+                cboSalaryTargetVersion.DroppedDown ||
+                cboYearAdjustTargetVersion.DroppedDown ||
+                cboShoteateTargetVersion.DroppedDown ||
+                cboFWTargetVersion.Focused ||
+                cboCoreTargetVersion.Focused ||
+                cboSalaryTargetVersion.Focused ||
+                cboYearAdjustTargetVersion.Focused ||
+                cboShoteateTargetVersion.Focused)
+            {
+                return;
+            }
+            
             // 現在のアクティブコントロールがフィルタテキストボックスでない場合も更新しない
-            // また、アクティブコントロールが目標バージョンComboBoxのいずれかでもない場合も更新しない
             var activeControl = this.ActiveControl;
             if (activeControl != txtOrgFilter)
             {
