@@ -109,7 +109,7 @@ namespace uhr.info.detector
         /// <summary>
         /// Shoteateモジュールパス
         /// </summary>
-        public const string SHOTEATE_MODULE_PATH = "/cd/U-PDS_HR_SHOTEATE/スクリプト/アップグレードユーザ向け/現況確認";
+        public const string SHOTEATE_MODULE_PATH = "/cd/U-PDS_HR_SHOTEATE/モジュール/アップグレードユーザ向け";
         
         /// <summary>
         /// SQLファイルパス形式
