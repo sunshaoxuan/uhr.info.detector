@@ -89,7 +89,7 @@ namespace uhr.info.detector
         /// <summary>
         /// 諸手当フォルダ名キーワード
         /// </summary>
-        public const string SHOTEATE_FOLDER_KEYWORD = "(U-PDS HR 諸手当)";
+        public const string SHOTEATE_FOLDER_KEYWORD = "(U-PDS HR 諸手当申請)";
         
         /// <summary>
         /// Coreモジュールパス
@@ -109,7 +109,7 @@ namespace uhr.info.detector
         /// <summary>
         /// Shoteateモジュールパス
         /// </summary>
-        public const string SHOTEATE_MODULE_PATH = "/cd/U-PDS_HR_SHOTEATE/モジュール/アップグレードユーザ向け";
+        public const string SHOTEATE_MODULE_PATH = "/cd/U-PDS_HR_SHOTEATE/スクリプト/アップグレードユーザ向け/現況確認";
         
         /// <summary>
         /// SQLファイルパス形式
