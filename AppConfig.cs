@@ -85,6 +85,11 @@ namespace uhr.info.detector
         /// 年末調整フォルダ名キーワード
         /// </summary>
         public const string YEAR_ADJUST_FOLDER_KEYWORD = "(U-PDS HR 年末調整)";
+
+        /// <summary>
+        /// 諸手当フォルダ名キーワード
+        /// </summary>
+        public const string SHOTEATE_FOLDER_KEYWORD = "(U-PDS HR 諸手当)";
         
         /// <summary>
         /// Coreモジュールパス
@@ -100,6 +105,11 @@ namespace uhr.info.detector
         /// Nenchoモジュールパス
         /// </summary>
         public const string YEAR_ADJUST_MODULE_PATH = "/cd/U-PDS_HR_NENCHO/モジュール/アップグレードユーザ向け";
+
+        /// <summary>
+        /// Shoteateモジュールパス
+        /// </summary>
+        public const string SHOTEATE_MODULE_PATH = "/cd/U-PDS_HR_SHOTEATE/モジュール/アップグレードユーザ向け";
         
         /// <summary>
         /// SQLファイルパス形式

@@ -1,4 +1,4 @@
-﻿namespace uhr.info.detector
+namespace uhr.info.detector
 {
     partial class frmMain
     {
@@ -36,6 +36,8 @@
             this.grpBaseInfo = new System.Windows.Forms.GroupBox();
             this.txtYearAdjustVersion = new System.Windows.Forms.TextBox();
             this.lblYearAdjustVersion = new System.Windows.Forms.Label();
+            this.txtShoteateVersion = new System.Windows.Forms.TextBox();
+            this.lblShoteateVersion = new System.Windows.Forms.Label();
             this.lblFWCustomized = new System.Windows.Forms.Label();
             this.txtSalaryVersion = new System.Windows.Forms.TextBox();
             this.lblSalaryVersion = new System.Windows.Forms.Label();
@@ -48,6 +50,8 @@
             this.lblOrgName = new System.Windows.Forms.Label();
             this.lblOrgCode = new System.Windows.Forms.Label();
             this.grpCustomizedInfo = new System.Windows.Forms.GroupBox();
+            this.txtLastUpdatedInfo = new System.Windows.Forms.TextBox();
+            this.tblLastUpdatedInfo = new System.Windows.Forms.Label();
             this.cmdMergeFilePrepare = new System.Windows.Forms.Button();
             this.lblCustomizedFileCount = new System.Windows.Forms.Label();
             this.cmdFilePrepare = new System.Windows.Forms.Button();
@@ -56,6 +60,8 @@
             this.lstCustomizedFile = new System.Windows.Forms.ListBox();
             this.lblCustomizedFiles = new System.Windows.Forms.Label();
             this.grpUpgradeInfo = new System.Windows.Forms.GroupBox();
+            this.lblShoteate = new System.Windows.Forms.Label();
+            this.cboShoteateTargetVersion = new System.Windows.Forms.ComboBox();
             this.lblYearAdjustTargetVersion = new System.Windows.Forms.Label();
             this.cboYearAdjustTargetVersion = new System.Windows.Forms.ComboBox();
             this.cboSalaryTargetVersion = new System.Windows.Forms.ComboBox();
@@ -68,8 +74,6 @@
             this.cmdSearch = new System.Windows.Forms.Button();
             this.stfDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.fldBrowser = new System.Windows.Forms.FolderBrowserDialog();
-            this.tblLastUpdatedInfo = new System.Windows.Forms.Label();
-            this.txtLastUpdatedInfo = new System.Windows.Forms.TextBox();
             this.statusStrip1.SuspendLayout();
             this.grpBaseInfo.SuspendLayout();
             this.grpCustomizedInfo.SuspendLayout();
@@ -122,6 +126,8 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.grpBaseInfo.Controls.Add(this.txtYearAdjustVersion);
             this.grpBaseInfo.Controls.Add(this.lblYearAdjustVersion);
+            this.grpBaseInfo.Controls.Add(this.txtShoteateVersion);
+            this.grpBaseInfo.Controls.Add(this.lblShoteateVersion);
             this.grpBaseInfo.Controls.Add(this.lblFWCustomized);
             this.grpBaseInfo.Controls.Add(this.txtSalaryVersion);
             this.grpBaseInfo.Controls.Add(this.lblSalaryVersion);
@@ -142,7 +148,7 @@
             // 
             // txtYearAdjustVersion
             // 
-            this.txtYearAdjustVersion.Location = new System.Drawing.Point(127, 165);
+            this.txtYearAdjustVersion.Location = new System.Drawing.Point(127, 169);
             this.txtYearAdjustVersion.Name = "txtYearAdjustVersion";
             this.txtYearAdjustVersion.Size = new System.Drawing.Size(316, 19);
             this.txtYearAdjustVersion.TabIndex = 12;
@@ -151,11 +157,28 @@
             // lblYearAdjustVersion
             // 
             this.lblYearAdjustVersion.AutoSize = true;
-            this.lblYearAdjustVersion.Location = new System.Drawing.Point(20, 168);
+            this.lblYearAdjustVersion.Location = new System.Drawing.Point(20, 172);
             this.lblYearAdjustVersion.Name = "lblYearAdjustVersion";
             this.lblYearAdjustVersion.Size = new System.Drawing.Size(98, 12);
             this.lblYearAdjustVersion.TabIndex = 11;
             this.lblYearAdjustVersion.Text = "年末調整バージョン";
+            // 
+            // txtShoteateVersion
+            // 
+            this.txtShoteateVersion.Location = new System.Drawing.Point(127, 145);
+            this.txtShoteateVersion.Name = "txtShoteateVersion";
+            this.txtShoteateVersion.Size = new System.Drawing.Size(316, 19);
+            this.txtShoteateVersion.TabIndex = 10;
+            this.txtShoteateVersion.WordWrap = false;
+            // 
+            // lblShoteateVersion
+            // 
+            this.lblShoteateVersion.AutoSize = true;
+            this.lblShoteateVersion.Location = new System.Drawing.Point(32, 148);
+            this.lblShoteateVersion.Name = "lblShoteateVersion";
+            this.lblShoteateVersion.Size = new System.Drawing.Size(86, 12);
+            this.lblShoteateVersion.TabIndex = 11;
+            this.lblShoteateVersion.Text = "諸手当バージョン";
             // 
             // lblFWCustomized
             // 
@@ -167,7 +190,7 @@
             // 
             // txtSalaryVersion
             // 
-            this.txtSalaryVersion.Location = new System.Drawing.Point(127, 133);
+            this.txtSalaryVersion.Location = new System.Drawing.Point(127, 121);
             this.txtSalaryVersion.Name = "txtSalaryVersion";
             this.txtSalaryVersion.Size = new System.Drawing.Size(85, 19);
             this.txtSalaryVersion.TabIndex = 9;
@@ -176,7 +199,7 @@
             // lblSalaryVersion
             // 
             this.lblSalaryVersion.AutoSize = true;
-            this.lblSalaryVersion.Location = new System.Drawing.Point(20, 136);
+            this.lblSalaryVersion.Location = new System.Drawing.Point(20, 124);
             this.lblSalaryVersion.Name = "lblSalaryVersion";
             this.lblSalaryVersion.Size = new System.Drawing.Size(98, 12);
             this.lblSalaryVersion.TabIndex = 8;
@@ -184,7 +207,7 @@
             // 
             // txtCoreVersion
             // 
-            this.txtCoreVersion.Location = new System.Drawing.Point(127, 106);
+            this.txtCoreVersion.Location = new System.Drawing.Point(127, 97);
             this.txtCoreVersion.Name = "txtCoreVersion";
             this.txtCoreVersion.Size = new System.Drawing.Size(85, 19);
             this.txtCoreVersion.TabIndex = 7;
@@ -193,7 +216,7 @@
             // lblCoreVersion
             // 
             this.lblCoreVersion.AutoSize = true;
-            this.lblCoreVersion.Location = new System.Drawing.Point(20, 109);
+            this.lblCoreVersion.Location = new System.Drawing.Point(20, 100);
             this.lblCoreVersion.Name = "lblCoreVersion";
             this.lblCoreVersion.Size = new System.Drawing.Size(98, 12);
             this.lblCoreVersion.TabIndex = 6;
@@ -201,7 +224,7 @@
             // 
             // txtFWVersion
             // 
-            this.txtFWVersion.Location = new System.Drawing.Point(127, 79);
+            this.txtFWVersion.Location = new System.Drawing.Point(127, 73);
             this.txtFWVersion.Name = "txtFWVersion";
             this.txtFWVersion.Size = new System.Drawing.Size(85, 19);
             this.txtFWVersion.TabIndex = 5;
@@ -210,7 +233,7 @@
             // lblFWVersion
             // 
             this.lblFWVersion.AutoSize = true;
-            this.lblFWVersion.Location = new System.Drawing.Point(4, 82);
+            this.lblFWVersion.Location = new System.Drawing.Point(4, 76);
             this.lblFWVersion.Name = "lblFWVersion";
             this.lblFWVersion.Size = new System.Drawing.Size(114, 12);
             this.lblFWVersion.TabIndex = 4;
@@ -218,7 +241,7 @@
             // 
             // txtOrgName
             // 
-            this.txtOrgName.Location = new System.Drawing.Point(127, 52);
+            this.txtOrgName.Location = new System.Drawing.Point(127, 49);
             this.txtOrgName.Name = "txtOrgName";
             this.txtOrgName.Size = new System.Drawing.Size(202, 19);
             this.txtOrgName.TabIndex = 3;
@@ -235,7 +258,7 @@
             // lblOrgName
             // 
             this.lblOrgName.AutoSize = true;
-            this.lblOrgName.Location = new System.Drawing.Point(77, 55);
+            this.lblOrgName.Location = new System.Drawing.Point(77, 52);
             this.lblOrgName.Name = "lblOrgName";
             this.lblOrgName.Size = new System.Drawing.Size(41, 12);
             this.lblOrgName.TabIndex = 1;
@@ -249,6 +272,7 @@
             this.lblOrgCode.Size = new System.Drawing.Size(56, 12);
             this.lblOrgCode.TabIndex = 0;
             this.lblOrgCode.Text = "機構コード";
+            this.lblOrgCode.Click += new System.EventHandler(this.lblOrgCode_Click);
             // 
             // grpCustomizedInfo
             // 
@@ -270,6 +294,22 @@
             this.grpCustomizedInfo.TabIndex = 4;
             this.grpCustomizedInfo.TabStop = false;
             this.grpCustomizedInfo.Text = "カスタマイズ情報";
+            // 
+            // txtLastUpdatedInfo
+            // 
+            this.txtLastUpdatedInfo.Location = new System.Drawing.Point(97, 24);
+            this.txtLastUpdatedInfo.Name = "txtLastUpdatedInfo";
+            this.txtLastUpdatedInfo.Size = new System.Drawing.Size(716, 19);
+            this.txtLastUpdatedInfo.TabIndex = 11;
+            // 
+            // tblLastUpdatedInfo
+            // 
+            this.tblLastUpdatedInfo.AutoSize = true;
+            this.tblLastUpdatedInfo.Location = new System.Drawing.Point(13, 27);
+            this.tblLastUpdatedInfo.Name = "tblLastUpdatedInfo";
+            this.tblLastUpdatedInfo.Size = new System.Drawing.Size(77, 12);
+            this.tblLastUpdatedInfo.TabIndex = 10;
+            this.tblLastUpdatedInfo.Text = "最後更新情報";
             // 
             // cmdMergeFilePrepare
             // 
@@ -347,6 +387,8 @@
             // grpUpgradeInfo
             // 
             this.grpUpgradeInfo.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.grpUpgradeInfo.Controls.Add(this.lblShoteate);
+            this.grpUpgradeInfo.Controls.Add(this.cboShoteateTargetVersion);
             this.grpUpgradeInfo.Controls.Add(this.lblYearAdjustTargetVersion);
             this.grpUpgradeInfo.Controls.Add(this.cboYearAdjustTargetVersion);
             this.grpUpgradeInfo.Controls.Add(this.cboSalaryTargetVersion);
@@ -362,10 +404,27 @@
             this.grpUpgradeInfo.TabStop = false;
             this.grpUpgradeInfo.Text = "目標バージョン情報";
             // 
+            // lblShoteate
+            // 
+            this.lblShoteate.AutoSize = true;
+            this.lblShoteate.Location = new System.Drawing.Point(18, 112);
+            this.lblShoteate.Name = "lblShoteate";
+            this.lblShoteate.Size = new System.Drawing.Size(41, 12);
+            this.lblShoteate.TabIndex = 21;
+            this.lblShoteate.Text = "諸手当";
+            // 
+            // cboShoteateTargetVersion
+            // 
+            this.cboShoteateTargetVersion.FormattingEnabled = true;
+            this.cboShoteateTargetVersion.Location = new System.Drawing.Point(81, 108);
+            this.cboShoteateTargetVersion.Name = "cboShoteateTargetVersion";
+            this.cboShoteateTargetVersion.Size = new System.Drawing.Size(277, 20);
+            this.cboShoteateTargetVersion.TabIndex = 20;
+            // 
             // lblYearAdjustTargetVersion
             // 
             this.lblYearAdjustTargetVersion.AutoSize = true;
-            this.lblYearAdjustTargetVersion.Location = new System.Drawing.Point(6, 109);
+            this.lblYearAdjustTargetVersion.Location = new System.Drawing.Point(6, 141);
             this.lblYearAdjustTargetVersion.Name = "lblYearAdjustTargetVersion";
             this.lblYearAdjustTargetVersion.Size = new System.Drawing.Size(53, 12);
             this.lblYearAdjustTargetVersion.TabIndex = 19;
@@ -374,25 +433,25 @@
             // cboYearAdjustTargetVersion
             // 
             this.cboYearAdjustTargetVersion.FormattingEnabled = true;
-            this.cboYearAdjustTargetVersion.Location = new System.Drawing.Point(81, 105);
+            this.cboYearAdjustTargetVersion.Location = new System.Drawing.Point(81, 137);
             this.cboYearAdjustTargetVersion.Name = "cboYearAdjustTargetVersion";
-            this.cboYearAdjustTargetVersion.Size = new System.Drawing.Size(116, 20);
+            this.cboYearAdjustTargetVersion.Size = new System.Drawing.Size(277, 20);
             this.cboYearAdjustTargetVersion.TabIndex = 18;
             // 
             // cboSalaryTargetVersion
             // 
             this.cboSalaryTargetVersion.FormattingEnabled = true;
-            this.cboSalaryTargetVersion.Location = new System.Drawing.Point(81, 77);
+            this.cboSalaryTargetVersion.Location = new System.Drawing.Point(81, 79);
             this.cboSalaryTargetVersion.Name = "cboSalaryTargetVersion";
-            this.cboSalaryTargetVersion.Size = new System.Drawing.Size(116, 20);
+            this.cboSalaryTargetVersion.Size = new System.Drawing.Size(277, 20);
             this.cboSalaryTargetVersion.TabIndex = 17;
             // 
             // cboCoreTargetVersion
             // 
             this.cboCoreTargetVersion.FormattingEnabled = true;
-            this.cboCoreTargetVersion.Location = new System.Drawing.Point(81, 49);
+            this.cboCoreTargetVersion.Location = new System.Drawing.Point(81, 50);
             this.cboCoreTargetVersion.Name = "cboCoreTargetVersion";
-            this.cboCoreTargetVersion.Size = new System.Drawing.Size(116, 20);
+            this.cboCoreTargetVersion.Size = new System.Drawing.Size(277, 20);
             this.cboCoreTargetVersion.TabIndex = 16;
             // 
             // cboFWTargetVersion
@@ -400,13 +459,13 @@
             this.cboFWTargetVersion.FormattingEnabled = true;
             this.cboFWTargetVersion.Location = new System.Drawing.Point(81, 21);
             this.cboFWTargetVersion.Name = "cboFWTargetVersion";
-            this.cboFWTargetVersion.Size = new System.Drawing.Size(116, 20);
+            this.cboFWTargetVersion.Size = new System.Drawing.Size(277, 20);
             this.cboFWTargetVersion.TabIndex = 15;
             // 
             // lblSalaryTargetVersion
             // 
             this.lblSalaryTargetVersion.AutoSize = true;
-            this.lblSalaryTargetVersion.Location = new System.Drawing.Point(6, 81);
+            this.lblSalaryTargetVersion.Location = new System.Drawing.Point(6, 83);
             this.lblSalaryTargetVersion.Name = "lblSalaryTargetVersion";
             this.lblSalaryTargetVersion.Size = new System.Drawing.Size(53, 12);
             this.lblSalaryTargetVersion.TabIndex = 14;
@@ -415,7 +474,7 @@
             // lblCoreTargetVersion
             // 
             this.lblCoreTargetVersion.AutoSize = true;
-            this.lblCoreTargetVersion.Location = new System.Drawing.Point(6, 53);
+            this.lblCoreTargetVersion.Location = new System.Drawing.Point(6, 54);
             this.lblCoreTargetVersion.Name = "lblCoreTargetVersion";
             this.lblCoreTargetVersion.Size = new System.Drawing.Size(53, 12);
             this.lblCoreTargetVersion.TabIndex = 12;
@@ -450,22 +509,6 @@
             this.cmdSearch.Text = "調査 (&C)";
             this.cmdSearch.UseVisualStyleBackColor = true;
             this.cmdSearch.Click += new System.EventHandler(this.cmdSearch_Click);
-            // 
-            // tblLastUpdatedInfo
-            // 
-            this.tblLastUpdatedInfo.AutoSize = true;
-            this.tblLastUpdatedInfo.Location = new System.Drawing.Point(13, 27);
-            this.tblLastUpdatedInfo.Name = "tblLastUpdatedInfo";
-            this.tblLastUpdatedInfo.Size = new System.Drawing.Size(77, 12);
-            this.tblLastUpdatedInfo.TabIndex = 10;
-            this.tblLastUpdatedInfo.Text = "最後更新情報";
-            // 
-            // txtLastUpdatedInfo
-            // 
-            this.txtLastUpdatedInfo.Location = new System.Drawing.Point(97, 24);
-            this.txtLastUpdatedInfo.Name = "txtLastUpdatedInfo";
-            this.txtLastUpdatedInfo.Size = new System.Drawing.Size(716, 19);
-            this.txtLastUpdatedInfo.TabIndex = 11;
             // 
             // frmMain
             // 
@@ -508,6 +551,8 @@
         private System.Windows.Forms.TextBox txtOrgFilter;
         private System.Windows.Forms.ListBox lstOrgs;
         private System.Windows.Forms.GroupBox grpBaseInfo;
+        private System.Windows.Forms.TextBox txtShoteateVersion;
+        private System.Windows.Forms.Label lblShoteateVersion;
         private System.Windows.Forms.TextBox txtSalaryVersion;
         private System.Windows.Forms.Label lblSalaryVersion;
         private System.Windows.Forms.TextBox txtCoreVersion;
@@ -545,6 +590,8 @@
         private System.Windows.Forms.FolderBrowserDialog fldBrowser;
         private System.Windows.Forms.TextBox txtLastUpdatedInfo;
         private System.Windows.Forms.Label tblLastUpdatedInfo;
+        private System.Windows.Forms.Label lblShoteate;
+        private System.Windows.Forms.ComboBox cboShoteateTargetVersion;
     }
 }
 

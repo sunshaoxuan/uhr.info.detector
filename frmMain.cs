@@ -319,6 +319,7 @@ namespace uhr.info.detector
             txtFWVersion.ReadOnly = true; txtFWVersion.BackColor = Color.White;
             txtSalaryVersion.ReadOnly = true; txtSalaryVersion.BackColor = Color.White;
             txtCoreVersion.ReadOnly = true; txtCoreVersion.BackColor = Color.White;
+            txtShoteateVersion.ReadOnly = true; txtShoteateVersion.BackColor = Color.White;
             txtYearAdjustVersion.ReadOnly = true; txtYearAdjustVersion.BackColor = Color.White;
             cmdShowReport.Enabled = false;
             txtLastUpdatedInfo.Enabled = true;
@@ -889,6 +890,7 @@ namespace uhr.info.detector
                 txtFWVersion.Clear();
                 txtSalaryVersion.Clear();
                 txtCoreVersion.Clear();
+                txtShoteateVersion.Clear();
                 txtYearAdjustVersion.Clear();
                 lstCustomizedFile.Items.Clear();
                 lstMergeNeedsFile.Items.Clear();
@@ -897,6 +899,7 @@ namespace uhr.info.detector
                 txtFWVersion.BackColor = Color.White;
                 txtSalaryVersion.BackColor = Color.White;
                 txtCoreVersion.BackColor = Color.White;
+                txtShoteateVersion.BackColor = Color.White;
                 txtYearAdjustVersion.BackColor = Color.White;
                 lblCustomizedFileCount.Text = "";
                 lblFWCustomized.Text = ""; // 追加：FWカスタマイズラベルもクリア
@@ -1963,6 +1966,10 @@ namespace uhr.info.detector
                     folderKeyword = AppConfig.YEAR_ADJUST_FOLDER_KEYWORD;
                     modulePath = AppConfig.YEAR_ADJUST_MODULE_PATH;
                     break;
+                case "Shoteate":
+                    folderKeyword = AppConfig.SHOTEATE_FOLDER_KEYWORD;
+                    modulePath = AppConfig.SHOTEATE_MODULE_PATH;
+                    break;
                 default:
                     throw new Exception($"未知のモジュール: {moduleName}");
             }
@@ -2012,6 +2019,8 @@ namespace uhr.info.detector
                 string targetCoreVer = cboCoreTargetVersion.SelectedItem?.ToString() ?? "";
                 string currentSalaryVer = txtSalaryVersion.Text.Trim();
                 string targetSalaryVer = cboSalaryTargetVersion.SelectedItem?.ToString() ?? "";
+                string currentShoteateVer = txtShoteateVersion.Text.Trim();
+                string targetShoteateVer = cboShoteateTargetVersion.SelectedItem?.ToString() ?? "";
                 string currentYearAdjustVer = txtYearAdjustVersion.Text.Trim();
                 string targetYearAdjustVer = cboYearAdjustTargetVersion.SelectedItem?.ToString() ?? "";
 
@@ -2031,12 +2040,17 @@ namespace uhr.info.detector
                     "Salary", svnBasePath, svnPath, AppConfig.WEB_SALARY_FOLDER_KEYWORD,
                     AppConfig.SALARY_MODULE_PATH, token);
 
-                // 5. YearAdjust バージョン比較
+                // 5. Shoteate バージョン比較（年末調整より前に実行）
+                await CheckModuleVersionConflicts(mergeFiles, customizedFiles, currentShoteateVer, targetShoteateVer,
+                    "Shoteate", svnBasePath, svnPath, AppConfig.SHOTEATE_FOLDER_KEYWORD,
+                    AppConfig.SHOTEATE_MODULE_PATH, token);
+
+                // 6. YearAdjust バージョン比較
                 await CheckModuleVersionConflicts(mergeFiles, customizedFiles, currentYearAdjustVer, targetYearAdjustVer,
                     "YearAdjust", svnBasePath, svnPath, AppConfig.YEAR_ADJUST_FOLDER_KEYWORD,
                     AppConfig.YEAR_ADJUST_MODULE_PATH, token);
 
-                // 6. 結果を表示
+                // 7. 結果を表示
                 lstMergeNeedsFile.Items.Clear();
                 if (mergeFiles.Any())
                 {
@@ -2100,6 +2114,7 @@ namespace uhr.info.detector
                     txtFWVersion.Text = "(SVN取得失敗)";
                     txtSalaryVersion.Text = "(SVN取得失敗)";
                     txtCoreVersion.Text = "(SVN取得失敗)";
+                    txtShoteateVersion.Text = "(SVN取得失敗)";
                     txtYearAdjustVersion.Text = "(SVN取得失敗)";
                     return;
                 }
@@ -2107,21 +2122,36 @@ namespace uhr.info.detector
                 // SQL ファイルから特定の属性名を検索
                 var lines = sqlContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                 int versionCount = 0;
+                var foundPropertyNames = new System.Collections.Generic.HashSet<string>(); // デバッグ用：見つかった属性名を記録
 
                 foreach (var line in lines)
                 {
                     if (line.ToUpper().Contains("INSERT") && line.ToUpper().Contains("CONF_SYSCONTROL"))
                     {
                         string propertyName = ExtractPropertyName(line);
+                        
+                        // デバッグ用：見つかった属性名を記録
+                        if (!string.IsNullOrEmpty(propertyName))
+                        {
+                            foundPropertyNames.Add(propertyName);
+                        }
 
-                        // FrameVersion を検索（大文字小文字無視）
-                        if (propertyName.Equals("FrameVersion", StringComparison.OrdinalIgnoreCase))
+                        // FrameVersion を検索（大文字小文字無視、複数のバリエーションに対応）
+                        if (propertyName.Equals("FrameVersion", StringComparison.OrdinalIgnoreCase) ||
+                            propertyName.Equals("FrameworkVersion", StringComparison.OrdinalIgnoreCase) ||
+                            propertyName.Equals("FRAME_VERSION", StringComparison.OrdinalIgnoreCase) ||
+                            propertyName.Equals("Framework_Version", StringComparison.OrdinalIgnoreCase))
                         {
                             string value = ExtractValue(line);
                             if (!string.IsNullOrEmpty(value))
                             {
                                 txtFWVersion.Text = value;
                                 versionCount++;
+                                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] FrameVersion 見つかりました: {propertyName} = {value}\n");
+                            }
+                            else
+                            {
+                                LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] FrameVersion 属性は見つかりましたが、値が空です: {propertyName}\n");
                             }
                         }
                         // UhrCore_Version を検索（大文字小文字無視）
@@ -2154,7 +2184,31 @@ namespace uhr.info.detector
                                 versionCount++;
                             }
                         }
+                        // UhrShoteate_Version を検索（大文字小文字無視）
+                        else if (propertyName.Equals("UhrShoteate_Version", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string value = ExtractValue(line);
+                            if (!string.IsNullOrEmpty(value))
+                            {
+                                txtShoteateVersion.Text = value;
+                                versionCount++;
+                            }
+                        }
                     }
+                }
+
+                // デバッグ用：FrameVersionが見つからなかった場合、見つかった属性名をログに記録
+                if (string.IsNullOrEmpty(txtFWVersion.Text))
+                {
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] FrameVersion が見つかりませんでした。機関コード: {orgCode}\n");
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] SQLファイル内で見つかった属性名一覧: {string.Join(", ", foundPropertyNames)}\n");
+                }
+
+                // FrameVersionが見つからなかった場合、ヒントを表示
+                if (string.IsNullOrEmpty(txtFWVersion.Text))
+                {
+                    txtFWVersion.Text = "(FrameVersion属性が見つかりません)";
+                    LogHelper.SafeLog("DebugLog.txt", $"[{DateTime.Now:HH:mm:ss}] 警告: FrameVersion属性が見つかりませんでした。機関コード: {orgCode}\n");
                 }
 
                 tslStatus.Text = $"バージョン情報 {versionCount}個を取得しました。";
@@ -2167,6 +2221,7 @@ namespace uhr.info.detector
                 txtFWVersion.Text = "(SVN取得失敗)";
                 txtSalaryVersion.Text = "(SVN取得失敗)";
                 txtCoreVersion.Text = "(SVN取得失敗)";
+                txtShoteateVersion.Text = "(SVN取得失敗)";
                 txtYearAdjustVersion.Text = "(SVN取得失敗)";
                 tslStatus.Text = $"バージョン取得エラー: {ex.Message}";
             }
@@ -2250,6 +2305,14 @@ namespace uhr.info.detector
                 txtSalaryVersion.BackColor = Color.LightGreen;
             else
                 txtSalaryVersion.BackColor = Color.White;
+
+            // 諸手当バージョンのチェック（部分一致も許容）
+            if (!string.IsNullOrEmpty(txtShoteateVersion.Text) &&
+                !string.IsNullOrEmpty(cboShoteateTargetVersion.Text) &&
+                txtShoteateVersion.Text.Contains(cboShoteateTargetVersion.Text))
+                txtShoteateVersion.BackColor = Color.LightGreen;
+            else
+                txtShoteateVersion.BackColor = Color.White;
 
             // 年末調整バージョンのチェック：部分一致を含む、実際のバージョン番号は長い文字列（例："2.11.4+reigetsu2.11.4+shoumeisho2.10.2"）
             if (!string.IsNullOrEmpty(txtYearAdjustVersion.Text) &&
@@ -3572,6 +3635,11 @@ namespace uhr.info.detector
             {
                 return VersionCompareHelper.CompareVersionStringSmartAsc(x, y);
             }
+        }
+
+        private void lblOrgCode_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
