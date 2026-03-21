@@ -2057,7 +2057,10 @@ namespace uhr.info.detector
                     int maxVerLen = mergeFiles.Max(x => x.ver.Length);
                     int maxModuleLen = mergeFiles.Max(x => x.module.Length);
 
-                    foreach (var (file, ver, module) in mergeFiles.OrderBy(x => x.file).ThenBy(x => x.ver))
+                    foreach (var (file, ver, module) in mergeFiles
+                        .OrderBy(x => x.file)
+                        .ThenBy(x => x.module)
+                        .ThenBy(x => x.ver, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc)))
                     {
                         string verPadded = ver.PadRight(maxVerLen);
                         string modulePadded = module.PadRight(maxModuleLen);
