@@ -12,6 +12,13 @@ namespace uhr.info.detector
 {
     public partial class frmReport : Form
     {
+        private class MergeFileDisplayItem
+        {
+            public string Module { get; set; }
+            public string File { get; set; }
+            public List<string> Versions { get; set; }
+        }
+
         private string orgName;
         private string fwVersion;
         private string coreVersion;
@@ -32,7 +39,9 @@ namespace uhr.info.detector
             this.nenchoVersion = nenchoVersion;
             this.customizeFileCount = customizeFileCount;
             this.mergeFiles = mergeFiles;
-            
+
+            var mergeFileDisplayItems = BuildMergeFileDisplayItems(mergeFiles);
+
             // RTF转义处理：处理Unicode字符为RTF兼容格式
             string EscapeRtfText(string text)
             {
@@ -54,7 +63,12 @@ namespace uhr.info.detector
                 }
                 return sb.ToString();
             }
-            
+
+            string FormatMergeFileDisplay(MergeFileDisplayItem item)
+            {
+                return $"{item.Module} {item.File} ({string.Join(", ", item.Versions)})";
+            }
+
             // 生成RTF报告内容，对所有Unicode字符进行正确转义
             string report =
                 "{\\rtf1\\ansi\\deff0 " +
@@ -67,13 +81,20 @@ namespace uhr.info.detector
                 $"　　{{\\b 年末調整バージョン：}} {EscapeRtfText(nenchoVersion)}\\line" +
                 $"{{\\b カスタマイズファイル：}} {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}\\line" +
                 "{\\b マージが必要ファイル：}\\line　　" +
-                (mergeFiles.Count > 0 ? string.Join("\\line　　", mergeFiles.Select(x => EscapeRtfText(x))) : "なし") +
+                (mergeFileDisplayItems.Count > 0 ? string.Join("\\line　　", mergeFileDisplayItems.Select(x => EscapeRtfText(FormatMergeFileDisplay(x)))) : "なし") +
                 "\\line}";
             rtbResult.Rtf = report;
         }
 
         private void cmdCopyReturn_Click(object sender, EventArgs e)
         {
+            var mergeFileDisplayItems = BuildMergeFileDisplayItems(mergeFiles);
+
+            string FormatMergeFileDisplay(MergeFileDisplayItem item)
+            {
+                return $"{item.Module} {item.File} ({string.Join(", ", item.Versions)})";
+            }
+
             // 生成HTML正文
             string htmlBody = $@"
 <b>{orgName}</b>の調査結果は以下となります：<br>
@@ -84,7 +105,7 @@ namespace uhr.info.detector
 　　<b>　　諸手当バージョン：</b> {shoteateVersion}<br>
 　　<b>　　年末調整バージョン：</b> {nenchoVersion}<br>
 <b>カスタマイズファイル：</b> {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}<br>
-<b>マージが必要ファイル：</b><br>　　{(mergeFiles.Count > 0 ? string.Join("<br>　　", mergeFiles) : "なし")}
+<b>マージが必要ファイル：</b><br>　　{(mergeFileDisplayItems.Count > 0 ? string.Join("<br>　　", mergeFileDisplayItems.Select(FormatMergeFileDisplay)) : "なし")}
 ";
 
             // 标准HTML剪贴板格式
@@ -127,6 +148,56 @@ EndFragment:########
         private void cmdReturn_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private List<MergeFileDisplayItem> BuildMergeFileDisplayItems(List<string> rawMergeFiles)
+        {
+            var result = new List<MergeFileDisplayItem>();
+            if (rawMergeFiles == null || rawMergeFiles.Count == 0)
+                return result;
+
+            var parsedItems = rawMergeFiles
+                .Select(ParseMergeFileItem)
+                .Where(x => x.HasValue)
+                .Select(x => x.Value)
+                .ToList();
+
+            var grouped = parsedItems
+                .GroupBy(x => new { x.Module, x.File })
+                .OrderBy(g => g.Key.File)
+                .ThenBy(g => g.Key.Module);
+
+            foreach (var group in grouped)
+            {
+                var versions = group
+                    .Select(x => x.Version)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(x => x, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc))
+                    .ToList();
+
+                result.Add(new MergeFileDisplayItem
+                {
+                    Module = group.Key.Module,
+                    File = group.Key.File,
+                    Versions = versions
+                });
+            }
+
+            return result;
+        }
+
+        private (string Version, string Module, string File)? ParseMergeFileItem(string item)
+        {
+            if (string.IsNullOrWhiteSpace(item))
+                return null;
+
+            var parts = item.Trim()
+                .Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 3)
+                return null;
+
+            return (parts[0], parts[1], parts[2]);
         }
     }
 }
