@@ -157,9 +157,7 @@ EndFragment:########
                 return result;
 
             var parsedItems = rawMergeFiles
-                .Select(ParseMergeFileItem)
-                .Where(x => x.HasValue)
-                .Select(x => x.Value)
+                .SelectMany(ParseMergeFileItems)
                 .ToList();
 
             var grouped = parsedItems
@@ -186,18 +184,39 @@ EndFragment:########
             return result;
         }
 
-        private (string Version, string Module, string File)? ParseMergeFileItem(string item)
+        private IEnumerable<(string Version, string Module, string File)> ParseMergeFileItems(string item)
         {
             if (string.IsNullOrWhiteSpace(item))
-                return null;
+                yield break;
 
-            var parts = item.Trim()
-                .Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+            var rawMatch = System.Text.RegularExpressions.Regex.Match(
+                item,
+                @"^(?<ver>\S+)\s+(?<module>Core|Salary|Shoteate|YearAdjust)\s+(?<file>.+)$");
+            if (rawMatch.Success)
+            {
+                yield return (
+                    rawMatch.Groups["ver"].Value.Trim(),
+                    rawMatch.Groups["module"].Value.Trim(),
+                    rawMatch.Groups["file"].Value.Trim());
+                yield break;
+            }
 
-            if (parts.Length < 3)
-                return null;
+            var groupedMatch = System.Text.RegularExpressions.Regex.Match(
+                item,
+                @"^(?<module>Core|Salary|Shoteate|YearAdjust)\s+(?<file>.+?)\s+\((?<versions>[^()]*)\)$");
+            if (!groupedMatch.Success)
+                yield break;
 
-            return (parts[0], parts[1], parts[2]);
+            string module = groupedMatch.Groups["module"].Value.Trim();
+            string file = groupedMatch.Groups["file"].Value.Trim();
+            string versions = groupedMatch.Groups["versions"].Value.Trim();
+
+            foreach (var version in versions.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrEmpty(x)))
+            {
+                yield return (version, module, file);
+            }
         }
     }
 }

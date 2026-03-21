@@ -1935,14 +1935,54 @@ namespace uhr.info.detector
         private bool TryParseMergeListItem(string item, out string ver, out string module, out string file)
         {
             ver = module = file = "";
-            if (string.IsNullOrWhiteSpace(item)) return false;
-            // バージョン（連続非空白）+ スペース + モジュール名（Core|Salary|YearAdjust）+ スペース + ファイル名（残り全部）
-            var m = System.Text.RegularExpressions.Regex.Match(item, @"^(?<ver>\S+)\s+(?<module>Core|Salary|YearAdjust)\s+(?<file>.+)$");
-            if (!m.Success) return false;
-            ver = m.Groups["ver"].Value.Trim();
-            module = m.Groups["module"].Value.Trim();
-            file = m.Groups["file"].Value.Trim();
+            var entries = ParseMergeListItemEntries(item);
+            if (entries.Count == 0) return false;
+
+            var first = entries[0];
+            ver = first.ver;
+            module = first.module;
+            file = first.file;
             return true;
+        }
+
+        private List<(string ver, string module, string file)> ParseMergeListItemEntries(string item)
+        {
+            var result = new List<(string ver, string module, string file)>();
+            if (string.IsNullOrWhiteSpace(item))
+                return result;
+
+            // 旧形式: "{ver} {module} {file}"
+            var rawMatch = System.Text.RegularExpressions.Regex.Match(
+                item,
+                @"^(?<ver>\S+)\s+(?<module>Core|Salary|Shoteate|YearAdjust)\s+(?<file>.+)$");
+            if (rawMatch.Success)
+            {
+                result.Add((
+                    rawMatch.Groups["ver"].Value.Trim(),
+                    rawMatch.Groups["module"].Value.Trim(),
+                    rawMatch.Groups["file"].Value.Trim()));
+                return result;
+            }
+
+            // 新形式: "{module} {file} ({v1, v2, v3})"
+            var groupedMatch = System.Text.RegularExpressions.Regex.Match(
+                item,
+                @"^(?<module>Core|Salary|Shoteate|YearAdjust)\s+(?<file>.+?)\s+\((?<versions>[^()]*)\)$");
+            if (!groupedMatch.Success)
+                return result;
+
+            string module = groupedMatch.Groups["module"].Value.Trim();
+            string file = groupedMatch.Groups["file"].Value.Trim();
+            string versions = groupedMatch.Groups["versions"].Value.Trim();
+
+            foreach (var version in versions.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrEmpty(x)))
+            {
+                result.Add((version, module, file));
+            }
+
+            return result;
         }
 
         private string ResolveModuleVersionUrl(string moduleName, string version)
@@ -2054,17 +2094,22 @@ namespace uhr.info.detector
                 lstMergeNeedsFile.Items.Clear();
                 if (mergeFiles.Any())
                 {
-                    int maxVerLen = mergeFiles.Max(x => x.ver.Length);
-                    int maxModuleLen = mergeFiles.Max(x => x.module.Length);
-
-                    foreach (var (file, ver, module) in mergeFiles
+                    var groupedMergeFiles = mergeFiles
                         .OrderBy(x => x.file)
                         .ThenBy(x => x.module)
-                        .ThenBy(x => x.ver, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc)))
+                        .ThenBy(x => x.ver, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc))
+                        .GroupBy(x => new { x.module, x.file })
+                        .OrderBy(x => x.Key.file)
+                        .ThenBy(x => x.Key.module);
+
+                    foreach (var group in groupedMergeFiles)
                     {
-                        string verPadded = ver.PadRight(maxVerLen);
-                        string modulePadded = module.PadRight(maxModuleLen);
-                        lstMergeNeedsFile.Items.Add($"{verPadded} {modulePadded} {file}");
+                        var versions = group
+                            .Select(x => x.ver)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(x => x, Comparer<string>.Create(VersionCompareHelper.CompareVersionStringSmartAsc));
+
+                        lstMergeNeedsFile.Items.Add($"{group.Key.module} {group.Key.file} ({string.Join(", ", versions)})");
                     }
                 }
 
@@ -2452,58 +2497,59 @@ namespace uhr.info.detector
                 {
                     Application.DoEvents();
 
-                    // リスト項目フォーマット: "{verPadded} {modulePadded} {file}"
-                    if (!TryParseMergeListItem(lstMergeNeedsFile.Items[i].ToString(), out var ver, out var module, out var fileName))
+                    var mergeEntries = ParseMergeListItemEntries(lstMergeNeedsFile.Items[i].ToString());
+                    if (mergeEntries.Count == 0)
                     {
                         LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] リスト項目の解析失敗、スキップ: {lstMergeNeedsFile.Items[i]}\n");
                         ng++;
                         continue;
                     }
 
-
-                    // 1) 「モジュール・バージョン」のリモートバージョンディレクトリURLを特定（既実装の補助関数）
-                    if (!versionUrlCache.TryGetValue((module, ver), out var versionUrl))
+                    foreach (var (ver, module, fileName) in mergeEntries)
                     {
-                        versionUrl = ResolveModuleVersionUrl(module, ver); // e.g. .../<モジュール>/<v4.18.4 または 4.18.4>
-                        versionUrlCache[(module, ver)] = versionUrl;
-                    }
-
-                    // 2) 該当バージョンディレクトリ下の「全ファイルの相対パス」リストを取得（XML -R、UTF-8、既実装済み）
-                    if (!fileListCache.TryGetValue(versionUrl, out var relFiles))
-                    {
-                        relFiles = GetSvnFileListXmlRecursive(versionUrl, svnExe);
-                        fileListCache[versionUrl] = relFiles;
-                    }
-
-                    // 3) 「ファイル名のみ」でマッチング（通常1個ヒット、複数同名ファイルがあれば全部ダウンロード）
-                    var matches = relFiles.Where(p => Path.GetFileName(p)
-                                           .Equals(fileName, StringComparison.OrdinalIgnoreCase))
-                                           .ToList();
-
-                    if (matches.Count == 0)
-                    {
-                        LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] バージョン中に同名ファイルが見つかりません: {fileName} @ {module} {ver}\n");
-                        ng++;
-                        continue; // ☁E��路
-                    }
-
-                    // 4) 逐个匹配项落地下载 — E统一通迁ETryFetchToFile
-                    foreach (var rel in matches)
-                    {
-                        string url = versionUrl.TrimEnd('/') + "/" + rel.Replace("\\", "/");
-                        string local = Path.Combine(outRoot, module, ver, rel.Replace('/', Path.DirectorySeparatorChar));
-                        Directory.CreateDirectory(Path.GetDirectoryName(local) ?? outRoot);
-
-                        bool fetched = TryFetchToFile(svnExe, url, local, exportTimeout, catTimeout);
-                        if (!fetched)
+                        // 1) 「モジュール・バージョン」のリモートバージョンディレクトリURLを特定（既実装の補助関数）
+                        if (!versionUrlCache.TryGetValue((module, ver), out var versionUrl))
                         {
-                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗、スキップ: {url}\n");
-                            ng++;                 // 失敗数にカウント
-                            continue;             // ★失敗はショートカット、次のファイルへ直接進む
+                            versionUrl = ResolveModuleVersionUrl(module, ver); // e.g. .../<モジュール>/<v4.18.4 または 4.18.4>
+                            versionUrlCache[(module, ver)] = versionUrl;
                         }
 
-                        ok++;                     // 成功した場合のみ +1
+                        // 2) 該当バージョンディレクトリ下の「全ファイルの相対パス」リストを取得（XML -R、UTF-8、既実装済み）
+                        if (!fileListCache.TryGetValue(versionUrl, out var relFiles))
+                        {
+                            relFiles = GetSvnFileListXmlRecursive(versionUrl, svnExe);
+                            fileListCache[versionUrl] = relFiles;
+                        }
 
+                        // 3) 「ファイル名のみ」でマッチング（通常1個ヒット、複数同名ファイルがあれば全部ダウンロード）
+                        var matches = relFiles.Where(p => Path.GetFileName(p)
+                                               .Equals(fileName, StringComparison.OrdinalIgnoreCase))
+                                               .ToList();
+
+                        if (matches.Count == 0)
+                        {
+                            LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] バージョン中に同名ファイルが見つかりません: {fileName} @ {module} {ver}\n");
+                            ng++;                 // 失敗数にカウント
+                            continue;
+                        }
+
+                        // 4) 逐个匹配项落地下载 — E统一通迁ETryFetchToFile
+                        foreach (var rel in matches)
+                        {
+                            string url = versionUrl.TrimEnd('/') + "/" + rel.Replace("\\", "/");
+                            string local = Path.Combine(outRoot, module, ver, rel.Replace('/', Path.DirectorySeparatorChar));
+                            Directory.CreateDirectory(Path.GetDirectoryName(local) ?? outRoot);
+
+                            bool fetched = TryFetchToFile(svnExe, url, local, exportTimeout, catTimeout);
+                            if (!fetched)
+                            {
+                                LogHelper.SafeLog("ErrorLog.txt", $"[{DateTime.Now:HH:mm:ss}] ダウンロード失敗、スキップ: {url}\n");
+                                ng++;                 // 失敗数にカウント
+                                continue;             // ★失敗はショートカット、次のファイルへ直接進む
+                            }
+
+                            ok++;                     // 成功した場合のみ +1
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -2987,9 +3033,9 @@ namespace uhr.info.detector
                 {
                     foreach (var item in lstMergeNeedsFile.Items)
                     {
-                        if (TryParseMergeListItem(item.ToString(), out var ver, out var module, out var fileName))
+                        foreach (var entry in ParseMergeListItemEntries(item.ToString()))
                         {
-                            mergeFileList.Add((ver, module, fileName));
+                            mergeFileList.Add((entry.ver, entry.module, entry.file));
                         }
                     }
                 }));
