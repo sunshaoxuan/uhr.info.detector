@@ -1,4 +1,4 @@
-﻿
+
 namespace uhr.info.detector
 {
     partial class frmReport
@@ -47,8 +47,8 @@ namespace uhr.info.detector
             this.rtbResult.Size = new System.Drawing.Size(419, 159);
             this.rtbResult.TabIndex = 0;
             this.rtbResult.Text = "$ORGNAME$の調査結果は以下となります：\nUHRバージョン：\n　　フレームワークバージョン：$FRAMEVERSION$\n　　共通機能バージョン：$CORE" +
-    "VERSION$$\n　　給与明細バージョン：$SALARYVERSION$\nカスタマイズファイル：$CUSTOMIZEFILECOUNT$\nマージが必要ファイル" +
-    "：\n　　$MERGEFILES$";
+    "VERSION$$\n　　給与明細バージョン：$SALARYVERSION$\n　　諸手当バージョン：$SHOTEATEVERSION$\n　　年末調整バージョン：$NENCHOVERSION$" +
+    "\nカスタマイズファイル：$CUSTOMIZEFILECOUNT$\nマージが必要ファイル：\n　　$MERGEFILES$";
             // 
             // cmdCopyReturn
             // 

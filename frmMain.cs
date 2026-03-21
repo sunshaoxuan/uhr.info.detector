@@ -2330,6 +2330,7 @@ namespace uhr.info.detector
             string fwVersion = txtFWVersion.Text.Trim();
             string coreVersion = txtCoreVersion.Text.Trim();
             string salaryVersion = txtSalaryVersion.Text.Trim();
+            string shoteateVersion = txtShoteateVersion.Text.Trim();
             string nenchoVersion = txtYearAdjustVersion.Text.Trim();
 
             // 修正：カスタマイズファイル数量判定ロジック
@@ -2347,7 +2348,7 @@ namespace uhr.info.detector
             foreach (var item in lstMergeNeedsFile.Items)
                 mergeFiles.Add(item.ToString());
             // レポートウィンドウを開く
-            using (var dlg = new frmReport(orgName, fwVersion, coreVersion, salaryVersion, nenchoVersion, customizeFileCount, mergeFiles))
+            using (var dlg = new frmReport(orgName, fwVersion, coreVersion, salaryVersion, shoteateVersion, nenchoVersion, customizeFileCount, mergeFiles))
             {
                 dlg.ShowDialog(this);
             }

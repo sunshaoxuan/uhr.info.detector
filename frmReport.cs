@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -16,17 +16,19 @@ namespace uhr.info.detector
         private string fwVersion;
         private string coreVersion;
         private string salaryVersion;
+        private string shoteateVersion;
         private string nenchoVersion;
         private int customizeFileCount;
         private List<string> mergeFiles;
 
-        public frmReport(string orgName, string fwVersion, string coreVersion, string salaryVersion, string nenchoVersion, int customizeFileCount, List<string> mergeFiles)
+        public frmReport(string orgName, string fwVersion, string coreVersion, string salaryVersion, string shoteateVersion, string nenchoVersion, int customizeFileCount, List<string> mergeFiles)
         {
             InitializeComponent();
             this.orgName = orgName;
             this.fwVersion = fwVersion;
             this.coreVersion = coreVersion;
             this.salaryVersion = salaryVersion;
+            this.shoteateVersion = shoteateVersion;
             this.nenchoVersion = nenchoVersion;
             this.customizeFileCount = customizeFileCount;
             this.mergeFiles = mergeFiles;
@@ -61,6 +63,7 @@ namespace uhr.info.detector
                 $"　　{{\\b フレームワークバージョン：}} {EscapeRtfText(fwVersion)}\\line" +
                 $"　　{{\\b 共通機能バージョン：}} {EscapeRtfText(coreVersion)}\\line" +
                 $"　　{{\\b 給与明細バージョン：}} {EscapeRtfText(salaryVersion)}\\line" +
+                $"　　{{\\b 諸手当バージョン：}} {EscapeRtfText(shoteateVersion)}\\line" +
                 $"　　{{\\b 年末調整バージョン：}} {EscapeRtfText(nenchoVersion)}\\line" +
                 $"{{\\b カスタマイズファイル：}} {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}\\line" +
                 "{\\b マージが必要ファイル：}\\line　　" +
@@ -78,6 +81,7 @@ namespace uhr.info.detector
 　　<b>　　フレームワークバージョン：</b> {fwVersion}<br>
 　　<b>　　共通機能バージョン：</b> {coreVersion}<br>
 　　<b>　　給与明細バージョン：</b> {salaryVersion}<br>
+　　<b>　　諸手当バージョン：</b> {shoteateVersion}<br>
 　　<b>　　年末調整バージョン：</b> {nenchoVersion}<br>
 <b>カスタマイズファイル：</b> {(customizeFileCount > 0 ? customizeFileCount.ToString() : "なし")}<br>
 <b>マージが必要ファイル：</b><br>　　{(mergeFiles.Count > 0 ? string.Join("<br>　　", mergeFiles) : "なし")}
